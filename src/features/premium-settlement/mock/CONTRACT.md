@@ -1,6 +1,6 @@
 # mock 基础层契约（types / constants / data / engine）
 
-> 本文件规定 `src/mock/` 基础层的**导出符号与签名**。实现者（移植原型 JS）必须照此命名导出，UI 层只按本契约调用。
+> 本文件规定 `src/features/premium-settlement/mock/` 基础层的**导出符号与签名**。实现者（移植原型 JS）必须照此命名导出，UI 层只按本契约调用。
 > 数据与文案必须从 `/Users/onelonely/Documents/溢价/增加溢价原型.html` **逐字逐数**抄录，不得脑补。
 > 参考拆解规范：`/tmp/xmfspec/*.md`（00 全局、01 成员、02 推广方、03 结算、04 计算与 Mock）。
 > 金额一律分精度：`roundAmount(x) = Math.round(x*100)/100`；展示 `moneyText(v)` 用千分位两位小数。
@@ -8,7 +8,7 @@
 
 ---
 
-## A. `src/mock/types.ts`
+## A. `src/features/premium-settlement/mock/types.ts`
 
 全部类型声明（无逻辑）。金额字段类型统一 `number`（分精度，引擎内 roundAmount 后存）。
 
@@ -141,7 +141,7 @@ export interface SettlementRow {
 
 ---
 
-## B. `src/mock/constants.ts`
+## B. `src/features/premium-settlement/mock/constants.ts`
 
 导出以下常量/函数（可读文案、下拉选项、Tag 语义）：
 
@@ -191,7 +191,7 @@ export function collectionModeText(mode: CollectionMode): string;
 
 ---
 
-## C. `src/mock/data.ts`
+## C. `src/features/premium-settlement/mock/data.ts`
 
 初始静态数据（逐字抄录）：
 
@@ -211,7 +211,7 @@ export function memberConfigTypeForRoleId(roleId: string): 'merchant' | 'channel
 
 ---
 
-## D. `src/mock/engine.ts`
+## D. `src/features/premium-settlement/mock/engine.ts`
 
 **纯函数、无 React/DOM、无全局 state。** 凡是原函数读取 `state.*` 的地方，改为参数传入。凡是纯渲染/Toast 的代码**不要移植**。下面 `members` = 完整 `TenantMember[]`（含 accountConfig），`promotions` = 完整 `PromotionPartner[]`。
 
@@ -328,7 +328,7 @@ export function splitRuleOrderCalculation(...): string;                    // �
 
 ---
 
-## E. `src/mock/store.tsx`
+## E. `src/features/premium-settlement/mock/store.tsx`
 
 React Context Provider + hook，状态/缓存都在这里：
 

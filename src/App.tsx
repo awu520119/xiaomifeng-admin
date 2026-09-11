@@ -8,11 +8,11 @@ import {
 import { Avatar, Button, Layout, Menu, Space, Typography } from 'antd';
 import { useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { ShareProvider } from './mock/store';
-import MemberManagementPage from './pages/MemberManagementPage';
-import PromotionManagementPage from './pages/PromotionManagementPage';
-import SettlementPage from './pages/SettlementPage';
-import BillDetailPage from './pages/BillDetailPage';
+import { ShareProvider } from './features/premium-settlement/mock/store';
+import MemberManagementPage from './features/premium-settlement/pages/MemberManagementPage';
+import PromotionManagementPage from './features/premium-settlement/pages/PromotionManagementPage';
+import SettlementPage from './features/premium-settlement/pages/SettlementPage';
+import BillDetailPage from './features/premium-settlement/pages/BillDetailPage';
 
 const { Header, Sider, Content } = Layout;
 

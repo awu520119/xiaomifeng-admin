@@ -1,5 +1,5 @@
 // mock 基础层 —— 类型定义（无逻辑）
-// 契约见 src/mock/CONTRACT.md。所有金额字段统一 number（分精度，引擎内 roundAmount 后存）。
+// 契约见 src/features/premium-settlement/mock/CONTRACT.md。所有金额字段统一 number（分精度，引擎内 roundAmount 后存）。
 
 export type MemberStatus = 'enabled' | 'disabled';
 export type CollectionMode = 'platform' | 'merchant';      // 收款主体：自营收款 / 景区商家收款
