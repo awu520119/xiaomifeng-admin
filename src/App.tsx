@@ -2,6 +2,7 @@ import {
   AccountBookOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  OrderedListOutlined,
   ShopOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
@@ -13,10 +14,12 @@ import MemberManagementPage from './features/premium-settlement/pages/MemberMana
 import PromotionManagementPage from './features/premium-settlement/pages/PromotionManagementPage';
 import SettlementPage from './features/premium-settlement/pages/SettlementPage';
 import BillDetailPage from './features/premium-settlement/pages/BillDetailPage';
+import OrderListPage from './features/premium-settlement/pages/OrderListPage';
 
 const { Header, Sider, Content } = Layout;
 
 const NAV_ITEMS = [
+  { key: '/orders', label: '订单管理', icon: <OrderedListOutlined /> },
   { key: '/settlement', label: '结算中心', icon: <AccountBookOutlined /> },
   { key: '/members', label: '成员管理', icon: <TeamOutlined /> },
   { key: '/promotion', label: '推广方管理', icon: <ShopOutlined /> },
@@ -33,6 +36,7 @@ function pageTitle(pathname: string): string {
   const bill = pathname.match(/^\/settlement\/bill\/(thirdParty|offline|promotion)\//);
   if (bill && BILL_DETAIL_TITLE[bill[1]]) return BILL_DETAIL_TITLE[bill[1]];
   if (pathname.startsWith('/settlement')) return '结算中心';
+  if (pathname.startsWith('/orders')) return '订单管理';
   if (pathname.startsWith('/members')) return '成员管理';
   if (pathname.startsWith('/promotion')) return '推广方管理';
   return '';
@@ -94,6 +98,7 @@ export default function App() {
 
           <Content className="app-content">
             <Routes>
+              <Route path="/orders" element={<OrderListPage />} />
               <Route path="/members" element={<MemberManagementPage />} />
               <Route path="/promotion" element={<PromotionManagementPage />} />
               <Route path="/settlement/bill/:view/:billId" element={<BillDetailPage />} />

@@ -1,8 +1,8 @@
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import { App, Button, Select, Table, Tag } from 'antd';
+import { App, Button, Modal, Select, Table, Tag } from 'antd';
 import type { TableProps } from 'antd';
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { moneyText, tagColor } from '../mock/constants';
 import { billMetrics, billOrderDisplay, billScenicOptions, buildSettlementRows, filterBillOrders, tenantBusinessAccounts } from '../mock/engine';
 import { useShare } from '../mock/store';
@@ -11,6 +11,7 @@ import type { Order, SettlementRow } from '../mock/types';
 const { useApp } = App;
 
 type ViewKey = 'offline' | 'thirdParty' | 'promotion';
+type DetailPerspective = 'self' | 'channel' | 'merchant' | 'promotion';
 
 export function settlementDetailTitle(view: string): string {
   if (view === 'thirdParty') return '线上自动分账详情';
@@ -20,10 +21,12 @@ export function settlementDetailTitle(view: string): string {
 
 export default function BillDetailPage() {
   const { view, billId } = useParams<{ view: ViewKey; billId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { message } = useApp();
   const { members, promotions, orders, billOverrides } = useShare();
   const [scenic, setScenic] = useState('');
+  const [retrySubmitted, setRetrySubmitted] = useState<Record<string, 'split' | 'reversal'>>({});
 
   const row = useMemo(() => {
     const key: ViewKey = view === 'promotion' || view === 'thirdParty' ? view : 'offline';
@@ -42,9 +45,44 @@ export default function BillDetailPage() {
   const isSplit = row && (row.view === 'thirdParty' || row.fundingMode === 'order_split');
   const lastAmountTitle = '应结算金额';
   const title = settlementDetailTitle(view || '');
+  const requestedPerspective = searchParams.get('perspective');
+  const detailPerspective: DetailPerspective = ['channel', 'merchant', 'promotion'].includes(requestedPerspective || '')
+    ? requestedPerspective as DetailPerspective
+    : 'self';
+  const canRetrySplit = detailPerspective === 'self';
 
   const openOrderDetail = (order: Order) => {
     message.info(`订单 ${order.orderNo}：订单详情属「订单管理」模块，本演示未实现`);
+  };
+
+  const displayOrder = (order: Order): Order => retrySubmitted[order.id] === 'reversal'
+    ? { ...order, reversalStatus: '待回退', fundingFailReason: '' }
+    : retrySubmitted[order.id] === 'split'
+      ? { ...order, splitStatus: '待分账', fundingFailReason: '' }
+    : order;
+
+  const retrySplit = (order: Order) => {
+    if (!canRetrySplit) {
+      message.error('当前角色无权重试分账');
+      return;
+    }
+    Modal.confirm({
+      title: order.reversalStatus === '回退失败' ? '确认重试回退？' : '确认重试分账？',
+      content: (
+        <div>
+          <div>订单号：{order.orderNo}</div>
+          <div>分账金额：￥{moneyText(row ? billOrderDisplay(row, order, row.detailFactor || 1).payable : 0)}</div>
+          <div>失败原因：{order.fundingFailReason || '未返回失败原因'}</div>
+        </div>
+      ),
+      okText: '确认重试',
+      cancelText: '取消',
+      onOk: () => {
+        const action = order.reversalStatus === '回退失败' ? 'reversal' : 'split';
+        setRetrySubmitted((current) => ({ ...current, [order.id]: action }));
+        message.success(`订单 ${order.orderNo} 已提交${action === 'reversal' ? '重试回退' : '重试分账'}`);
+      },
+    });
   };
 
   const orderStatusTag = (order: Order) => <Tag color={tagColor(order.status)}>{order.status}</Tag>;
@@ -130,18 +168,34 @@ export default function BillDetailPage() {
         {
           title: '分账状态',
           key: 'splitStatus',
-          width: 104,
-          align: 'center',
+          width: 230,
           render: (_: unknown, order: Order) => {
-            const d = billOrderDisplay(row, order, row.detailFactor || 1);
-            return d.splitStatusText === '-' ? <span className="invoice-empty">-</span> : <Tag color={d.splitStatusColor}>{d.splitStatusText}</Tag>;
+            const currentOrder = displayOrder(order);
+            const d = billOrderDisplay(row, currentOrder, row.detailFactor || 1);
+            if (d.splitStatusText === '-') return <span className="invoice-empty">-</span>;
+            const isFailed = ['分账失败', '回退失败'].includes(d.splitStatusText);
+            return (
+              <div className="split-status-cell">
+                <div><Tag color={d.splitStatusColor}>{d.splitStatusText}</Tag></div>
+                {isFailed ? (
+                  <>
+                    <div className="split-failure-reason" title={d.splitStatusReason}>原因：{d.splitStatusReason}</div>
+                    {canRetrySplit ? (
+                      <Button type="link" size="small" className="split-retry-button" onClick={() => retrySplit(order)}>
+                        {d.splitStatusText === '回退失败' ? '重试回退' : '重试分账'}
+                      </Button>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            );
           },
         },
       );
     }
     return common;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [row, isSplit, lastAmountTitle]);
+  }, [row, isSplit, lastAmountTitle, retrySubmitted, canRetrySplit]);
 
   if (!row) {
     return (

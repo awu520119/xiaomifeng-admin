@@ -1394,6 +1394,7 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
     reversalStatus,
     fundingResult,
     splitSkipReason,
+    fundingFailReason: seed.fundingFailReason || '',
     splitNo: isOrderSplit && ['已分账', '分账失败'].includes(splitStatus || '') ? `LKLSPLIT${String(seed.id).slice(-10)}` : '',
     reversalNo: isOrderSplit && reversalStatus ? `LKLREV${String(seed.id).slice(-10)}` : '',
     splitAmount,
@@ -1469,7 +1470,19 @@ export function buildOrders(members: TenantMember[], promotions: PromotionPartne
     // —— 云栖山南门拍摄点（配置了拍摄点分成）不同客单的演示单 ——
     { id: '2026052510091200017', status: '已完成', orderType: '照片订单', theme: '云栖山南门快照', point: '云栖山南门', user: '范女士', phone: '137****3612', amount: 99, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-05-25 10:09:12', completedAt: '2026-05-25 10:21:47' },
     { id: '2026052515243600018', status: '已完成', orderType: '照片订单', theme: '云栖山南门双人照', point: '云栖山南门', user: '曾先生', phone: '138****5140', amount: 159, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-05-25 15:24:36', completedAt: '2026-05-25 15:40:12' },
-    { id: '2026052518021900019', status: '已完成', orderType: '照片订单', theme: '云栖山南门特惠单', point: '云栖山南门', user: '曹女士', phone: '135****9083', amount: 59, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-05-25 18:02:19', completedAt: '2026-05-25 18:15:05' }
+    { id: '2026052518021900019', status: '已完成', orderType: '照片订单', theme: '云栖山南门特惠单', point: '云栖山南门', user: '曹女士', phone: '135****9083', amount: 59, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-05-25 18:02:19', completedAt: '2026-05-25 18:15:05' },
+    // —— 2026-09 至 2026-10 订单列表演示数据 ——
+    { id: '2026090110162000020', status: '待付款', orderType: '套餐订单', theme: '云栖山晨雾旅拍', point: '云栖山游客中心', user: '王女士', phone: '191****2821', amount: 299, collectionMode: 'platform', fundingMode: 'order_split', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-09-01 10:16:20', completedAt: '' },
+    { id: '2026090314251800021', status: '待使用', orderType: '套餐订单', theme: '云栖山亲子旅拍', point: '云栖山北门', user: '张先生', phone: '191****7605', amount: 399, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '待分账', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-09-03 14:25:18', completedAt: '' },
+    { id: '2026090817535900022', status: '已使用', orderType: '套餐订单', theme: '云栖山家庭快照', point: '云栖山南门', user: '赵女士', phone: '136****0859', amount: 159, collectionMode: 'merchant', splitMode: 'system', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-09-08 17:53:59', completedAt: '2026-09-08 18:12:08' },
+    { id: '2026090915434900023', status: '已完成', orderType: '套餐订单', theme: '日落环山巡航', point: '云栖山观景台', user: '李先生', phone: '153****7096', amount: 499, rating: 5, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, createdAt: '2026-09-09 15:43:49', completedAt: '2026-09-09 16:21:08' },
+    { id: '2026091111502400024', status: '已取消', orderType: '套餐订单', theme: '模拟盒子主题01', point: '云栖山南门', user: '陈女士', phone: '153****7096', amount: 59, collectionMode: 'platform', fundingMode: 'order_split', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-09-11 11:50:24', completedAt: '' },
+    { id: '2026091410423200025', status: '已完成', orderType: '套餐订单', theme: '曲径通幽测试 08', point: '云栖山观景台', user: '吴先生', phone: '191****7605', amount: 399, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '分账失败', fundingFailReason: '线上自动分账接收方状态异常', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, createdAt: '2026-09-14 10:42:32', completedAt: '2026-09-14 11:06:15' },
+    { id: '2026091516304500026', status: '已完成', orderType: '套餐订单', theme: '夕舍酒店', point: '云栖山科创中心', user: '周女士', phone: '191****2821', amount: 299, rating: 4, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, createdAt: '2026-09-15 16:30:45', completedAt: '2026-09-15 16:58:30' },
+    { id: '2026091811382700027', status: '退款中', orderType: '照片订单', theme: '云栖山高光照片', point: '云栖山观景台', user: '刘女士', phone: '137****2406', amount: 129, collectionMode: 'merchant', splitMode: 'system', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-09-18 11:38:27', completedAt: '' },
+    { id: '2026092213081200028', status: '已退款', orderType: '照片订单', theme: '云栖山快照', point: '云栖山南门', user: '许女士', phone: '135****7788', amount: 99, paidAmount: 99, refundAmount: 99, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '', reversalStatus: '', splitSkipReason: '分账前退款', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-09-22 13:08:12', completedAt: '2026-09-22 13:22:10' },
+    { id: '2026092413282700030', status: '已退款', orderType: '照片订单', theme: '云栖山家庭快照', point: '云栖山南门', user: '吴女士', phone: '137****7364', amount: 159, paidAmount: 159, refundAmount: 159, collectionMode: 'merchant', fundingMode: 'order_split', splitStatus: '已分账', reversalStatus: '回退失败', fundingFailReason: '拉卡拉回退金额校验失败', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, createdAt: '2026-09-24 13:28:27', completedAt: '2026-09-24 13:42:16' },
+    { id: '2026100514203800029', status: '已完成', orderType: '套餐订单', theme: '湖畔亲子乐园主题', point: '湖滨亲子乐园', user: '郑先生', phone: '137****6612', amount: 329, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: channelId2, channelName: multiChannelName, createdAt: '2026-10-05 14:20:38', completedAt: '2026-10-05 14:48:06' }
   ];
   return seeds.map(seed => createTenantOrder(seed, merchant, channels, promotions));
 }
@@ -1739,7 +1752,7 @@ export function settlementOrderCalculation(order: Order, share: OrderSplitShare 
 }
 
 export function billOrderDisplay(bill: SettlementRow, order: Order, factor: number): {
-  amount: number; payable: number; premiumAmount: number; calculationText: string; splitNet: number; splitStatusText: string; splitStatusColor: string;
+  amount: number; payable: number; premiumAmount: number; calculationText: string; splitNet: number; splitStatusText: string; splitStatusColor: string; splitStatusReason: string;
 } {
   const detailFactor = Number(factor || 1);
   const amount = roundAmount(Number(order.paidAmount ?? order.amount ?? 0) * detailFactor);
@@ -1758,7 +1771,7 @@ export function billOrderDisplay(bill: SettlementRow, order: Order, factor: numb
   const rawResult = (isSplit && share)
     ? (order.reversalStatus || order.splitStatus || '待分账')
     : '-';
-  const result = rawResult === '回退失败' ? '-' : rawResult;
+  const result = rawResult;
   const colorMap: Record<string, string> = {
     待分账: 'warning', 待回退: 'warning', 分账失败: 'error', 回退失败: 'error',
     已分账: 'success', 已回退: 'success', 已冲减: 'success', 已生成分成: 'success', '-': 'default'
@@ -1770,7 +1783,8 @@ export function billOrderDisplay(bill: SettlementRow, order: Order, factor: numb
     calculationText: calculation.rule,
     splitNet,
     splitStatusText: result,
-    splitStatusColor: colorMap[result] || 'default'
+    splitStatusColor: colorMap[result] || 'default',
+    splitStatusReason: ['分账失败', '回退失败'].includes(result) ? (order.fundingFailReason || '未返回失败原因') : ''
   };
 }
 

@@ -139,7 +139,7 @@ export default function SettlementPage() {
             {row.status === '已驳回' ? '重新申请' : '申请结算'}
           </Button>
         ) : null}
-        <Button type="link" size="small" onClick={() => navigate(`/settlement/bill/${view}/${row.id}`)}>
+        <Button type="link" size="small" onClick={() => navigate(detailPath(row))}>
           详情
         </Button>
       </Space>
@@ -191,7 +191,7 @@ export default function SettlementPage() {
           key: 'action',
           width: 120,
           render: (_: unknown, row: SettlementRow) => (
-            <Button type="link" size="small" onClick={() => navigate(`/settlement/bill/${view}/${row.id}`)}>
+            <Button type="link" size="small" onClick={() => navigate(detailPath(row))}>
               详情
             </Button>
           ),
@@ -332,6 +332,10 @@ export default function SettlementPage() {
   }
 
   const canClickObjectType = view !== 'promotion' && isSelf;
+  const detailPath = (row: SettlementRow) => {
+    const detailPerspective = view === 'promotion' ? 'promotion' : perspective;
+    return `/settlement/bill/${view}/${row.id}?perspective=${detailPerspective}`;
+  };
 
   const statusFilterOptions = statusOptions.map((s) => ({ value: s, label: s }));
 

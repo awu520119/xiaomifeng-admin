@@ -7,7 +7,7 @@ export type SplitMode = 'thirdParty' | 'system';           // 分账方式：线
 export type FundingMode = 'order_split' | 'offline_settlement';
 export type ObjectType = 'merchant' | 'channel' | 'promotion';
 export type AuditStatus = 'approved' | 'pending' | 'rejected';
-export type RoleId = 'tr_admin' | 'tr_scenic_ops' | 'tr_channel' | 'tr_finance' | 'tr_store_ops';
+export type RoleId = 'tr_admin' | 'tr_scenic_ops' | 'tr_channel' | 'tr_promotion' | 'tr_finance' | 'tr_store_ops';
 
 export interface TenantRole {
   id: string; name: string; type: 'system' | 'custom'; desc: string;
@@ -100,6 +100,11 @@ export interface Order {
   channelAccountId: string; channelAccountIds: string[];
   settlementEligible: boolean; settlementEligibleAt?: string;
   splitStatus?: string; reversalStatus?: string; splitNo?: string; reversalNo?: string;
+  fundingFailReason?: string;
+  rating?: number;
+  paymentWay?: string; transactionId?: string; payer?: string; receiverSummary?: string; payerMchid?: string;
+  shootInfo?: { themeName?: string; scenicName?: string; shootPoint?: string; route?: string; clipTemplate?: string; motionDesc?: string; peopleCount?: string };
+  flowLogs?: Array<{ time: string; title: string }>;
   businessDate: string;
   createdAt: string; completedAt: string;
   splitReceivers?: SplitReceiver[]; channelSnapshots?: OrderChannelSnapshot[];

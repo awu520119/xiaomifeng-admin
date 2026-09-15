@@ -2,10 +2,11 @@
 import type { InvoiceFile, PromotionPartner, TenantMember, TenantRole } from './types';
 
 export const INITIAL_ROLES: TenantRole[] = [
-  { id: 'tr_admin', name: '租户管理员', type: 'system', desc: '租户核心管理', memberCount: 1, status: 'enabled', createdAt: '2026-06-12 14:30', updatedAt: '2026-07-01 10:00', permissions: ['tenant.admin.default'] },
-  { id: 'tr_scenic_ops', name: '景区商家', type: 'system', desc: '景区商家', memberCount: 1, status: 'enabled', createdAt: '2026-06-12 14:35', updatedAt: '2026-07-01 10:10', permissions: ['order.view', 'order.refund', 'settlement.period.manage'] },
-  { id: 'tr_channel', name: '渠道', type: 'system', desc: '渠道分销与佣金结算', memberCount: 2, status: 'enabled', createdAt: '2026-06-12 14:40', updatedAt: '2026-07-01 10:15', permissions: ['order.view', 'settlement.period.manage'] },
-  { id: 'tr_finance', name: '财务', type: 'system', desc: '结算与订单', memberCount: 1, status: 'enabled', createdAt: '2026-06-12 14:45', updatedAt: '2026-06-29 15:20', permissions: ['order.view', 'order.refund', 'settlement.period.manage', 'settlement.audit.view', 'settlement.audit.approve', 'settlement.audit.offlinePay'] },
+  { id: 'tr_admin', name: '租户管理员', type: 'system', desc: '租户核心管理', memberCount: 1, status: 'enabled', createdAt: '2026-06-12 14:30', updatedAt: '2026-07-01 10:00', permissions: ['tenant.admin.default', 'settlement.bill.view.all', 'settlement.split.retry'] },
+  { id: 'tr_scenic_ops', name: '景区商家', type: 'system', desc: '景区商家', memberCount: 1, status: 'enabled', createdAt: '2026-06-12 14:35', updatedAt: '2026-07-01 10:10', permissions: ['order.view', 'order.refund', 'settlement.period.manage', 'settlement.bill.view.own'] },
+  { id: 'tr_channel', name: '渠道', type: 'system', desc: '渠道分销与佣金结算', memberCount: 2, status: 'enabled', createdAt: '2026-06-12 14:40', updatedAt: '2026-07-01 10:15', permissions: ['order.view', 'settlement.period.manage', 'settlement.bill.view.own'] },
+  { id: 'tr_promotion', name: '推广方', type: 'system', desc: '推广方分成与账期查看', memberCount: 2, status: 'enabled', createdAt: '2026-06-12 14:42', updatedAt: '2026-07-01 10:16', permissions: ['order.view', 'settlement.bill.view.own'] },
+  { id: 'tr_finance', name: '财务', type: 'system', desc: '结算与订单', memberCount: 1, status: 'enabled', createdAt: '2026-06-12 14:45', updatedAt: '2026-06-29 15:20', permissions: ['order.view', 'order.refund', 'settlement.period.manage', 'settlement.bill.view.all', 'settlement.split.retry', 'settlement.audit.view', 'settlement.audit.approve', 'settlement.audit.offlinePay'] },
   { id: 'tr_store_ops', name: '自定义角色', type: 'custom', desc: '订单与交付', memberCount: 0, status: 'enabled', createdAt: '2026-06-30 15:30', updatedAt: '2026-06-30 15:30', permissions: ['order.view'] }
 ];
 

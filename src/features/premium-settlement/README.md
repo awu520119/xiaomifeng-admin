@@ -20,6 +20,13 @@
 | 页面 | 文件 |
 | --- | --- |
 | 成员管理 | `pages/MemberManagementPage.tsx` |
+| 订单列表 | `pages/OrderListPage.tsx` |
 | 推广方管理 | `pages/PromotionManagementPage.tsx` |
 | 结算中心 | `pages/SettlementPage.tsx` |
 | 账单详情 | `pages/BillDetailPage.tsx` |
+
+## 迭代记录
+
+- 账期明细的“分账失败”状态展示 Mock 失败原因，并提供“重试分账”入口；点击后将该订单状态切换为“待分账”。
+- 账期详情按视角模拟权限：自营管理员/财务可查看全部并二次确认重试分账，景区商家、渠道和推广方仅查看本人范围。
+- 订单列表统计区采用横向汇总布局，支持右上角“收起/展开”；收起后不影响订单筛选与列表操作。
