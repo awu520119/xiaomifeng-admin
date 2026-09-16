@@ -37,7 +37,12 @@ export const INITIAL_MEMBERS: TenantMember[] = [
       ],
       merchantMch: 'lkl_merchant_collect_001',
       receiverMchid: 'lkl_merchant_recv_001',
+      receiverMchName: '商家分账接收方',
+      splitEligibility: 'eligible',
       platformReceiverMchid: 'lkl_platform_recv_001',
+      settlementCycle: 'monthly',
+      pendingSettlementCycle: 'weekly',
+      pendingCycleEffectiveAt: '2026-10-01 00:00',
       bankOwner: '小蜜蜂自营业务部',
       bankName: '中国银行杭州高新支行',
       bankAccount: '6222********7612',
@@ -63,11 +68,17 @@ export const INITIAL_MEMBERS: TenantMember[] = [
       channelFundingPayer: 'platform',
       splitMode: 'system',
       receiverMchid: 'lkl_channel_recv_001',
+      receiverMchName: '渠道分账接收方',
+      splitEligibility: 'eligible',
+      settlementCycle: 'weekly',
       bankOwner: '小蜜蜂渠道合作部',
       bankName: '建设银行杭州西湖支行',
       bankAccount: '6217********8016',
       bankBranch: '杭州西湖支行',
-      channelRules: []
+      channelRules: [
+        { id: 'cr_weekly_center', point: '云栖山游客中心', rate: 6 },
+        { id: 'cr_weekly_view', point: '云栖山观景台', rate: 5 }
+      ]
     }
   },
   {
@@ -89,6 +100,9 @@ export const INITIAL_MEMBERS: TenantMember[] = [
       channelFundingPayer: 'platform',
       splitMode: 'system',
       receiverMchid: 'lkl_channel_recv_001',
+      receiverMchName: '渠道分账接收方',
+      splitEligibility: 'eligible',
+      settlementCycle: 'monthly',
       bankOwner: '小蜜蜂招商合作部',
       bankName: '招商银行杭州滨江支行',
       bankAccount: '6214********6688',
@@ -116,6 +130,7 @@ export const INITIAL_PROMOTIONS: PromotionPartner[] = [
     bankBranch: '西湖支行',
     splitMode: 'system',
     integrationStatus: 'integrated',
+    settlementCycle: 'monthly',
     rules: [
       { id: 'promo_nanmen', point: '云栖山南门', rate: 10 },
       { id: 'promo_beimen', point: '云栖山北门', rate: 8 }
@@ -137,6 +152,7 @@ export const INITIAL_PROMOTIONS: PromotionPartner[] = [
     bankBranch: '西湖支行',
     splitMode: 'system',
     integrationStatus: 'pending',
+    settlementCycle: 'monthly',
     rules: [{ id: 'promo_yunqi', point: '云栖山游客中心', rate: 8 }]
   },
   {
@@ -155,7 +171,8 @@ export const INITIAL_PROMOTIONS: PromotionPartner[] = [
     bankBranch: '灵隐支行',
     splitMode: 'system',
     integrationStatus: 'integrated',
-    rules: [{ id: 'promo_lydt', point: '西湖景区 · 断桥点', rate: 8 }]
+    settlementCycle: 'monthly',
+    rules: [{ id: 'promo_lydt', point: '云栖山观景台', rate: 8 }]
   },
   {
     id: 'promotion_qiantang',
@@ -171,8 +188,9 @@ export const INITIAL_PROMOTIONS: PromotionPartner[] = [
     bankName: '招商银行',
     bankAccount: '621483********1846',
     bankBranch: '钱江支行',
-    splitMode: 'thirdParty',
+    splitMode: 'system',
     integrationStatus: 'pending',
+    settlementCycle: 'monthly',
     rules: [{ id: 'promo_qiantang', point: '湖滨亲子乐园', rate: 6 }]
   },
   {
@@ -191,6 +209,7 @@ export const INITIAL_PROMOTIONS: PromotionPartner[] = [
     bankBranch: '湖滨支行',
     splitMode: 'system',
     integrationStatus: 'integrated',
+    settlementCycle: 'monthly',
     rules: [{ id: 'promo_xihu_walk', point: '云栖山游客中心', rate: 5 }]
   },
   {
@@ -209,6 +228,7 @@ export const INITIAL_PROMOTIONS: PromotionPartner[] = [
     bankBranch: '滨江支行',
     splitMode: 'system',
     integrationStatus: 'rejected',
+    settlementCycle: 'monthly',
     rejectReason: '收款账户开户名与营业执照主体不一致，请核对后重新提交',
     rules: [{ id: 'promo_mountain_view', point: '山顶观景台', rate: 7 }]
   }

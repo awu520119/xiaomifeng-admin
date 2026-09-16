@@ -1325,9 +1325,39 @@ select {
 }
 
 .bill-period {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
 }
+
+.bill-period-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bill-cycle-tag {
+  margin-inline-end: 0;
+  border: 0;
+  font-size: 12px;
+}
+
+.bill-period-range-line {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.bill-period-range-label { color: rgba(255, 255, 255, 0.68); font-size: 12px; line-height: 18px; }
+.bill-period-range-value { color: rgba(255, 255, 255, 0.94); font-size: 13px; line-height: 18px; font-variant-numeric: tabular-nums; }
 
 .bill-hero .bill-pill {
   border: 0;
@@ -1429,6 +1459,15 @@ select {
 
 .bill-hero .ant-select {
   color: #303338;
+}
+
+/* 二次确认弹窗遵循后台 8px 弹窗、4px 按钮圆角规范 */
+.ant-modal-confirm .ant-modal-content {
+  border-radius: 8px;
+}
+
+.ant-modal-confirm .ant-btn {
+  border-radius: 4px;
 }
 
 .detail-table-card {

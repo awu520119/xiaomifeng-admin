@@ -18,6 +18,7 @@ interface ShareStoreValue {
   /** 申请结算后对账单行的本地改写，按账单行 id 记录（审核中 + 已上传发票） */
   billOverrides: Record<string, BillOverrideState>;
   applyBill: (billId: string, patch: BillOverrideState) => void;
+  retryFunding: (orderId: string, action: 'split' | 'reversal') => void;
 }
 
 const ShareStoreContext = createContext<ShareStoreValue | null>(null);
@@ -26,10 +27,11 @@ export function ShareProvider({ children }: { children: ReactNode }) {
   const [members, setMembers] = useState<TenantMember[]>(INITIAL_MEMBERS);
   const [promotions, setPromotions] = useState<PromotionPartner[]>(INITIAL_PROMOTIONS);
   const [billOverrides, setBillOverrides] = useState<Record<string, BillOverrideState>>({});
+  const [fundingOverrides, setFundingOverrides] = useState<Record<string, Partial<Order>>>({});
 
   const orders = useMemo(
-    () => buildOrders(members, promotions),
-    [members, promotions],
+    () => buildOrders(members, promotions).map((order) => ({ ...order, ...(fundingOverrides[order.id] || {}) })),
+    [members, promotions, fundingOverrides],
   );
 
   const value = useMemo<ShareStoreValue>(() => {
@@ -70,6 +72,13 @@ export function ShareProvider({ children }: { children: ReactNode }) {
       billOverrides,
       applyBill: (billId, patch) =>
         setBillOverrides((cur) => ({ ...cur, [billId]: { ...cur[billId], ...patch } })),
+      retryFunding: (orderId, action) =>
+        setFundingOverrides((cur) => ({
+          ...cur,
+          [orderId]: action === 'reversal'
+            ? { ...(cur[orderId] || {}), reversalStatus: '待回退', fundingFailReason: '' }
+            : { ...(cur[orderId] || {}), splitStatus: '待分账', fundingFailReason: '' },
+        })),
     };
   }, [members, promotions, orders, billOverrides]);
 

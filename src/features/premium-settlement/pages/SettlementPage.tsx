@@ -1,6 +1,8 @@
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
-import { App, Button, Input, Modal, Select, Space, Table, Tabs, Tag, Upload } from 'antd';
+import { App, Button, DatePicker, Input, Modal, Select, Space, Table, Tabs, Tag, Upload } from 'antd';
 import type { TableProps, UploadFile } from 'antd';
+import dayjs, { type Dayjs } from 'dayjs';
+import 'dayjs/locale/zh-cn';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { moneyText, splitModeText, tagColor } from '../mock/constants';
@@ -9,6 +11,7 @@ import { useShare } from '../mock/store';
 import type { InvoiceFile, SettlementRow, SettlementRowStatus } from '../mock/types';
 
 const { useApp } = App;
+dayjs.locale('zh-cn');
 
 type ViewKey = 'offline' | 'thirdParty' | 'promotion';
 type PerspectiveKey = 'self' | 'channel' | 'merchant' | 'promotion';
@@ -30,12 +33,6 @@ const THIRD_PARTY_STATUS: SettlementRowStatus[] = ['待分账', '已分账', '�
 const OFFLINE_STATUS: SettlementRowStatus[] = ['出账中', '待申请', '审核中', '打款中', '已打款', '已驳回'];
 
 const OBJECT_LABEL: Record<string, string> = { merchant: '景区商家', channel: '渠道', promotion: '推广方' };
-const OBJECT_OPTIONS = [
-  { value: 'merchant', label: '景区商家' },
-  { value: 'channel', label: '渠道' },
-  { value: 'promotion', label: '推广方' },
-];
-
 const APPLY_UPLOAD_TIME = '2026-05-24 18:36:00';
 const ALLOWED_EXT = ['pdf', 'jpg', 'jpeg', 'png'];
 
@@ -44,9 +41,14 @@ export default function SettlementPage() {
   const { message } = useApp();
   const navigate = useNavigate();
 
-  const [view, setView] = useState<ViewKey>('thirdParty');
+  const [view, setView] = useState<ViewKey>(() => {
+    const saved = typeof window !== 'undefined' ? window.sessionStorage.getItem('settlement.activeTab') : null;
+    return VIEW_TABS.some((item) => item.key === saved) ? saved as ViewKey : 'thirdParty';
+  });
   const [perspective, setPerspective] = useState<PerspectiveKey>('self');
-  const [month, setMonth] = useState('');
+  const [cycleType, setCycleType] = useState('');
+  const [periodDate, setPeriodDate] = useState<Dayjs | null>(null);
+  const [promotionPhone, setPromotionPhone] = useState('');
   const [objectType, setObjectType] = useState('');
   const [accountId, setAccountId] = useState('');
   const [status, setStatus] = useState('');
@@ -63,13 +65,18 @@ export default function SettlementPage() {
     [view, orders, accounts, billOverrides],
   );
 
+  const visibleAccountOptions = useMemo(() => {
+    const map = new Map<string, SettlementRow['account']>();
+    rawRows.forEach((row) => map.set(row.account.id, row.account));
+    return Array.from(map.values());
+  }, [rawRows]);
+
   const firstChannelId = useMemo(() => {
     const channel = accounts.find((account) => account.objectType === 'channel');
     return channel ? channel.id : '';
   }, [accounts]);
 
   const rows = useMemo(() => {
-    const kw = month.trim();
     return rawRows.filter((row) => {
       if (perspective === 'channel') {
         if (row.objectType !== 'channel' || row.account.id !== firstChannelId) return false;
@@ -81,15 +88,24 @@ export default function SettlementPage() {
         if (objectType && row.objectType !== objectType) return false;
         if (accountId && row.account.id !== accountId) return false;
       }
+      if (cycleType && row.cycleType !== cycleType) return false;
+      if (periodDate) {
+        if (cycleType === 'monthly' && row.period !== periodDate.format('YYYY-MM')) return false;
+        if (cycleType === 'weekly') {
+          const monday = periodDate.subtract((periodDate.day() + 6) % 7, 'day').format('YYYY-MM-DD');
+          if (!row.periodStart.startsWith(monday)) return false;
+        }
+        if (view === 'promotion' && row.period !== periodDate.format('YYYY-MM')) return false;
+      }
+      if (view === 'promotion' && perspective !== 'promotion' && promotionPhone && !(row.account.phone || '').includes(promotionPhone.trim())) return false;
       if (status && row.status !== status) return false;
-      if (kw && !(row.period || '').includes(kw)) return false;
       return true;
     });
-  }, [rawRows, perspective, firstChannelId, objectType, accountId, status, month]);
+  }, [rawRows, perspective, firstChannelId, cycleType, periodDate, promotionPhone, objectType, accountId, status]);
 
   const isSelf = perspective === 'self';
 
-  // 结算对象单元格：账号 主文本 + 名称 副文本
+  // 结算对象单元格：账号 主文本 + 名称 副文本，对象类型在自营视角独立成列
   const objectCell = (row: SettlementRow) => (
     <div className="cell-stack" title={`${row.account.account}（${row.account.name}）`}>
       <span className="cell-title">{row.account.account}</span>
@@ -97,10 +113,34 @@ export default function SettlementPage() {
     </div>
   );
 
+  const periodText = (row: SettlementRow) => row.cycleType === 'monthly'
+    ? row.period.replace(/^(\d{4})-(\d{2})$/, '$1年$2月')
+    : row.period;
+
+  const cycleTypeColumn = {
+    title: '周期类型',
+    key: 'cycleType',
+    width: 90,
+    render: (_: unknown, row: SettlementRow) => (
+      <Tag color={row.cycleType === 'weekly' ? 'processing' : 'default'}>{row.cycleType === 'weekly' ? '周结' : '月结'}</Tag>
+    ),
+  };
+
+  const periodColumn = {
+    title: '账期',
+    key: 'period',
+    width: 180,
+    render: (_: unknown, row: SettlementRow) => (
+      <span className="cell-title" title={`${row.periodStart} 至 ${row.periodEnd}`}>{periodText(row)}</span>
+    ),
+  };
+
   const settlementAmountCell = (row: SettlementRow) => (
     <div className="settlement-amount-cell">
       <span className="money-text">￥{moneyText(row.payable)}</span>
-      <span className="amount-breakdown">基础 ￥{moneyText(row.baseShareAmount)} + 溢价 ￥{moneyText(row.premiumAmount)}</span>
+      {row.objectType === 'merchant' ? (
+        <span className="amount-breakdown">基础 ￥{moneyText(row.baseShareAmount)} + 溢价 ￥{moneyText(row.premiumAmount)}</span>
+      ) : null}
     </div>
   );
 
@@ -112,21 +152,18 @@ export default function SettlementPage() {
 
   const statusOptions = view === 'thirdParty' ? THIRD_PARTY_STATUS : OFFLINE_STATUS;
 
-  const objectTypeColumn = {
-    title: '对象类型',
-    key: 'objectType',
-    width: 100,
-    align: 'center' as const,
-    render: (_: unknown, row: SettlementRow) => (
-      <Tag color={row.objectType === 'channel' ? 'processing' : 'success'}>{OBJECT_LABEL[row.objectType]}</Tag>
-    ),
-  };
-
   const objectColumn = {
     title: '结算对象',
     key: 'object',
-    width: 220,
+    width: 190,
     render: (_: unknown, row: SettlementRow) => objectCell(row),
+  };
+
+  const objectTypeColumn = {
+    title: '对象类型',
+    key: 'objectType',
+    width: 110,
+    render: (_: unknown, row: SettlementRow) => <Tag>{OBJECT_LABEL[row.objectType]}</Tag>,
   };
 
   const billAction = (row: SettlementRow) => {
@@ -170,7 +207,8 @@ export default function SettlementPage() {
   const columns: TableProps<SettlementRow>['columns'] = useMemo(() => {
     if (view === 'thirdParty') {
       const common: TableProps<SettlementRow>['columns'] = [
-        { title: '账期（月）', key: 'period', width: 120, dataIndex: 'period' },
+        periodColumn,
+        cycleTypeColumn,
         ...(isSelf ? [objectColumn, objectTypeColumn] : []),
         {
           title: '应分账金额',
@@ -187,6 +225,13 @@ export default function SettlementPage() {
           render: (_: unknown, row: SettlementRow) => <span className="money-text">￥{moneyText(row.netSettledAmount)}</span>,
         },
         {
+          title: '分账状态',
+          key: 'status',
+          width: 110,
+          align: 'center',
+          render: (_: unknown, row: SettlementRow) => statusTag(row),
+        },
+        {
           title: '操作',
           key: 'action',
           width: 120,
@@ -200,15 +245,17 @@ export default function SettlementPage() {
       return common;
     }
     if (view === 'promotion') {
+      const showPromotionName = perspective !== 'promotion';
       return [
-        { title: '账期（月）', key: 'period', width: 120, dataIndex: 'period' },
-        {
+        periodColumn,
+        cycleTypeColumn,
+        ...(showPromotionName ? [{
           title: '推广方名称',
           key: 'name',
           width: 180,
           render: (_: unknown, row: SettlementRow) => <span className="cell-title">{row.account.name}</span>,
-        },
-        {
+        }] : []),
+        ...(showPromotionName ? [{
           title: '手机号',
           key: 'phone',
           width: 140,
@@ -216,9 +263,9 @@ export default function SettlementPage() {
             const partner = promotions.find((p) => p.id === row.account.id);
             return partner ? partner.phone : row.account.phone || '-';
           },
-        },
+        }] : []),
         {
-          title: '应结算金额',
+          title: '应分成金额',
           key: 'payable',
           width: 150,
           align: 'right',
@@ -247,7 +294,8 @@ export default function SettlementPage() {
     }
     // offline
     return [
-      { title: '账期（月）', key: 'period', width: 120, dataIndex: 'period' },
+      periodColumn,
+      cycleTypeColumn,
       ...(isSelf ? [objectColumn, objectTypeColumn] : []),
       {
         title: '应结算金额',
@@ -277,7 +325,7 @@ export default function SettlementPage() {
       },
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, isSelf, promotions]);
+  }, [view, isSelf, promotions, perspective]);
 
   function openApplyModal(row: SettlementRow) {
     setApplyBillRow(row);
@@ -331,7 +379,7 @@ export default function SettlementPage() {
     return Upload.LIST_IGNORE;
   }
 
-  const canClickObjectType = view !== 'promotion' && isSelf;
+  const canFilterObject = isSelf && view !== 'promotion';
   const detailPath = (row: SettlementRow) => {
     const detailPerspective = view === 'promotion' ? 'promotion' : perspective;
     return `/settlement/bill/${view}/${row.id}?perspective=${detailPerspective}`;
@@ -349,77 +397,109 @@ export default function SettlementPage() {
               activeKey={view}
               onChange={(key) => {
                 setView(key as ViewKey);
+                window.sessionStorage.setItem('settlement.activeTab', key);
                 setStatus('');
+                if (key === 'promotion') {
+                  setCycleType('');
+                  setPeriodDate(null);
+                  setObjectType('');
+                  setAccountId('');
+                }
               }}
               items={VIEW_TABS.map((item) => ({ key: item.key, label: item.label }))}
             />
           </div>
-          {view !== 'promotion' ? (
-            <div className="settlement-perspective-bar">
-              <span className="toolbar-label">视角</span>
-              <Select
-                size="small"
-                style={{ width: 170 }}
-                value={perspective}
-                onChange={(value: PerspectiveKey) => {
-                  setPerspective(value);
-                  setObjectType('');
-                  setAccountId('');
-                }}
-                options={PERSPECTIVE_OPTIONS}
-              />
-            </div>
-          ) : null}
+          <div className="settlement-perspective-bar">
+            <span className="toolbar-label">视角</span>
+            <Select
+              size="small"
+              style={{ width: 170 }}
+              value={perspective}
+              onChange={(value: PerspectiveKey) => {
+                setPerspective(value);
+                setAccountId('');
+                if (value === 'promotion') setPromotionPhone('');
+              }}
+              options={PERSPECTIVE_OPTIONS}
+            />
+          </div>
         </div>
 
         <section className="filter-panel settlement-filters">
-          <Input
-            allowClear
-            prefix={<SearchOutlined />}
-            placeholder="全部账期"
-            style={{ width: 150 }}
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-          />
-          {canClickObjectType ? (
+          {view === 'promotion' ? (
+            <>
+              {perspective !== 'promotion' ? <Input allowClear prefix={<SearchOutlined />} placeholder="查询推广方手机号" style={{ width: 160 }} value={promotionPhone} onChange={(event) => setPromotionPhone(event.target.value)} /> : null}
+              <DatePicker allowClear picker="month" placeholder="选择月份" style={{ width: 150 }} value={periodDate} onChange={(value) => setPeriodDate(value)} />
+            </>
+          ) : null}
+          {view !== 'promotion' ? (
             <>
               <Select
                 allowClear
-                placeholder="全部对象类型"
-                style={{ width: 160 }}
+                placeholder="周期"
+                style={{ width: 130 }}
+                value={cycleType || undefined}
+                onChange={(value) => {
+                  setCycleType(value || '');
+                  setPeriodDate(null);
+                }}
+                options={[
+                  { value: 'weekly', label: '周结' },
+                  { value: 'monthly', label: '月结' },
+                ]}
+              />
+              <DatePicker
+                allowClear
+                picker={cycleType === 'weekly' ? 'week' : 'month'}
+                disabled={!cycleType}
+                placeholder={!cycleType ? '先选择周期' : cycleType === 'weekly' ? '选择周' : '选择月份'}
+                style={{ width: 150 }}
+                value={periodDate}
+                onChange={(value) => setPeriodDate(value)}
+              />
+            </>
+          ) : null}
+          {canFilterObject ? (
+            <>
+              <Select
+                allowClear
+                placeholder="对象类型"
+                style={{ width: 140 }}
                 value={objectType || undefined}
                 onChange={(value) => {
                   setObjectType(value || '');
                   setAccountId('');
                 }}
-                options={OBJECT_OPTIONS}
+                options={Object.entries(OBJECT_LABEL).map(([value, label]) => ({ value, label }))}
               />
               <Select
                 allowClear
                 showSearch
-                placeholder="全部对象"
+                placeholder="结算对象"
                 style={{ width: 220 }}
                 value={accountId || undefined}
                 onChange={(value) => setAccountId(value || '')}
-                options={accounts.map((account) => ({
-                  value: account.id,
-                  label: `${account.account}（${account.name}）`,
-                }))}
+                options={visibleAccountOptions
+                  .filter((account) => !objectType || account.objectType === objectType)
+                  .map((account) => ({ value: account.id, label: `${account.account}（${account.name}）` }))}
               />
             </>
           ) : null}
           <Select
             allowClear
-            placeholder="全部状态"
+            placeholder="状态"
             style={{ width: 140 }}
             value={status || undefined}
             onChange={(value) => setStatus(value || '')}
             options={statusFilterOptions}
           />
           <Button
+            type="link"
             icon={<ReloadOutlined />}
             onClick={() => {
-              setMonth('');
+              setCycleType('');
+              setPeriodDate(null);
+              setPromotionPhone('');
               setObjectType('');
               setAccountId('');
               setStatus('');

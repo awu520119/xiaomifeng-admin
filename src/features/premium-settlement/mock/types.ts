@@ -8,6 +8,8 @@ export type FundingMode = 'order_split' | 'offline_settlement';
 export type ObjectType = 'merchant' | 'channel' | 'promotion';
 export type AuditStatus = 'approved' | 'pending' | 'rejected';
 export type RoleId = 'tr_admin' | 'tr_scenic_ops' | 'tr_channel' | 'tr_promotion' | 'tr_finance' | 'tr_store_ops';
+export type SettlementCycleType = 'weekly' | 'monthly';
+export type SplitEligibility = 'eligible' | 'ineligible' | 'unsynced';
 
 export interface TenantRole {
   id: string; name: string; type: 'system' | 'custom'; desc: string;
@@ -35,7 +37,12 @@ export interface MerchantConfig {
   pointShareConfigs: PointShareRule[];
   merchantMch: string;                      // 收款商户号（景区商家收款用）
   receiverMchid: string;                    // 分账接收方商户号（线上自动分账用）
+  receiverMchName?: string;
+  splitEligibility?: SplitEligibility;
   platformReceiverMchid: string;
+  settlementCycle?: SettlementCycleType;
+  pendingSettlementCycle?: SettlementCycleType;
+  pendingCycleEffectiveAt?: string;
   bankOwner: string; bankName: string; bankAccount: string; bankBranch: string;
 }
 export interface ChannelConfig {
@@ -45,6 +52,11 @@ export interface ChannelConfig {
   channelFundingPayer: 'platform' | string;
   splitMode: SplitMode;
   receiverMchid: string;
+  receiverMchName?: string;
+  splitEligibility?: SplitEligibility;
+  settlementCycle?: SettlementCycleType;
+  pendingSettlementCycle?: SettlementCycleType;
+  pendingCycleEffectiveAt?: string;
   bankOwner: string; bankName: string; bankAccount: string; bankBranch: string;
   channelRules: ChannelRule[];
 }
@@ -70,6 +82,12 @@ export interface PromotionPartner {
   bankOwner: string; bankName: string; bankAccount: string; bankBranch: string;
   splitMode: SplitMode;
   integrationStatus: 'integrated' | 'pending' | 'rejected';
+  receiverMchid?: string;
+  receiverMchName?: string;
+  splitEligibility?: SplitEligibility;
+  settlementCycle: 'monthly';                 // 推广方固定月结，页面不提供周期配置
+  pendingSettlementCycle?: SettlementCycleType;
+  pendingCycleEffectiveAt?: string;
   rules: PromotionRule[];
   /** 最近一次驳回原因（驳回审核时记录，展示在审核状态与驳回提示） */
   rejectReason?: string;
@@ -132,6 +150,7 @@ export type SettlementRowStatus =
 export interface SettlementRow {
   id: string; view: 'offline' | 'thirdParty' | 'promotion';
   period: string; businessDate: string; fundingMode: FundingMode;
+  cycleType: SettlementCycleType; periodStart: string; periodEnd: string; isEstimated: boolean;
   account: { id: string; account: string; name: string; phone?: string; accountSource?: string; objectType: ObjectType };
   objectType: ObjectType; accountSource: 'B' | 'C';
   scenicText: string; scenicNames: string[];

@@ -15,8 +15,10 @@ import {
   Radio,
   Select,
   Space,
+  Switch,
   Table,
   Tag,
+  Tooltip,
 } from 'antd';
 import type { MenuProps, TableProps } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
@@ -34,11 +36,11 @@ import {
   PLATFORM_LAKALA_ACCOUNT_ID,
   PLATFORM_LAKALA_RECEIVER_ACCOUNT_ID,
   RESET_PASSWORD,
+  SETTLEMENT_CYCLE_OPTIONS,
   SHOOT_POINT_COLLECTION_MCHID_MAP,
   SHOOT_POINT_OPTIONS,
   SPLIT_MODE_OPTIONS,
   tagColor,
-  tagText,
 } from '../mock/constants';
 import { INITIAL_ROLES, memberConfigTypeForRoleId, roleNames } from '../mock/data';
 import {
@@ -58,6 +60,26 @@ import { useShare } from '../mock/store';
 import type { AccountConfig, ChannelConfig, MerchantConfig, PointShareRule, TenantMember } from '../mock/types';
 
 const { useApp } = App;
+function cycleText(value?: string): string {
+  return value === 'weekly' ? '周结' : value === 'monthly' ? '月结' : '未配置';
+}
+
+function cycleEffectiveAt(current?: string): string {
+  return current === 'weekly' ? '2026-09-21 00:00' : '2026-10-01 00:00';
+}
+
+function cycleFirstPeriod(next?: string, current?: string): string {
+  if (current === 'monthly' && next === 'weekly') return '2026-10-01 至 2026-10-05（过渡账期）';
+  if (current === 'weekly' && next === 'monthly') return '2026-09-21 至 2026-10-01（过渡账期）';
+  return next === 'weekly' ? '2026-09-21 至 2026-09-28' : '2026-10-01 至 2026-11-01';
+}
+
+function configWithCycleEffectiveAt(config: AccountConfig): AccountConfig {
+  if (config.pendingSettlementCycle && config.pendingSettlementCycle !== config.settlementCycle) {
+    return { ...config, pendingCycleEffectiveAt: config.pendingCycleEffectiveAt || cycleEffectiveAt(config.settlementCycle) };
+  }
+  return config;
+}
 
 interface BaseMemberFields {
   account: string;
@@ -120,16 +142,33 @@ function MchidInput(props: {
   placeholder: string;
   disabled?: boolean;
 }) {
-  const echo = MCHID_NAME_MAP[props.value] || '';
+  const [result, setResult] = useState<{ name: string; eligibility: 'eligible' | 'ineligible' | 'unsynced' } | null>(null);
+  useEffect(() => setResult(null), [props.value]);
+  const query = () => {
+    const mchid = props.value.trim();
+    const name = MCHID_NAME_MAP[mchid];
+    setResult({
+      name: name || '未查询到',
+      eligibility: name ? (mchid === 'lkl_suspended_recv_001' ? 'ineligible' : 'eligible') : 'unsynced',
+    });
+  };
+  const eligibilityText = result?.eligibility === 'eligible' ? '可分账' : result?.eligibility === 'ineligible' ? '不可分账' : '未同步';
+  const eligibilityColor = result?.eligibility === 'eligible' ? 'success' : result?.eligibility === 'ineligible' ? 'error' : 'default';
   return (
     <div className="mchid-lookup">
-      <Input
+      <Input.Search
         value={props.value}
         onChange={(e) => props.onChange(e.target.value)}
         placeholder={props.placeholder}
         disabled={props.disabled}
+        enterButton="查询"
+        onSearch={query}
       />
-      {echo ? <span className="mchid-echo">{props.value}（{echo}）</span> : null}
+      {result ? (
+        <span className="mchid-echo">
+          商户名称：{result.name}　分账资格：<Tag color={eligibilityColor}>{eligibilityText}</Tag>
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -138,6 +177,44 @@ function MchidInput(props: {
 function MchidReadonly(props: { mchid: string }) {
   const echo = MCHID_NAME_MAP[props.mchid] || '';
   return <span className="readonly-box">{props.mchid}（{echo}）</span>;
+}
+
+function HuifuLookup(props: {
+  value: string;
+  merchantName?: string;
+  eligibility?: 'eligible' | 'ineligible' | 'unsynced';
+  onChange: (value: string) => void;
+  onResult: (merchantName: string, eligibility: 'eligible' | 'ineligible' | 'unsynced') => void;
+  placeholder: string;
+  disabled?: boolean;
+}) {
+  const eligibilityText = props.eligibility === 'eligible' ? '可分账' : props.eligibility === 'ineligible' ? '不可分账' : '未同步';
+  const eligibilityColor = props.eligibility === 'eligible' ? 'success' : props.eligibility === 'ineligible' ? 'error' : 'default';
+  const query = () => {
+    const merchantName = MCHID_NAME_MAP[props.value.trim()];
+    if (!merchantName) {
+      props.onResult('未查询到', 'unsynced');
+      return;
+    }
+    props.onResult(merchantName, props.value.trim() === 'lkl_suspended_recv_001' ? 'ineligible' : 'eligible');
+  };
+  return (
+    <div className="mchid-lookup">
+      <Input.Search
+        value={props.value}
+        placeholder={props.placeholder}
+        enterButton="查询"
+        disabled={props.disabled}
+        onSearch={query}
+        onChange={(e) => props.onChange(e.target.value)}
+      />
+      {props.merchantName ? (
+        <span className="mchid-echo">
+          商户名称：{props.merchantName}　分账资格：<Tag color={eligibilityColor}>{eligibilityText}</Tag>
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 export default function MemberManagementPage() {
@@ -291,7 +368,7 @@ export default function MemberManagementPage() {
           name: base.name.trim(),
           phone: base.phone.trim(),
           roleIds: [roleId],
-          accountConfig: config ? { ...config } : undefined,
+          accountConfig: config ? configWithCycleEffectiveAt(config) : undefined,
         }
       : {
           id: `tm${Date.now()}`,
@@ -305,7 +382,7 @@ export default function MemberManagementPage() {
           status: 'enabled',
           registeredAt: nowText(),
           lastLogin: '-',
-          accountConfig: config ? { ...config } : undefined,
+          accountConfig: config ? configWithCycleEffectiveAt(config) : undefined,
         };
     saveMember(member);
     setDrawerOpen(false);
@@ -320,6 +397,28 @@ export default function MemberManagementPage() {
     } else {
       message.success(main);
     }
+  }
+
+  function confirmCycleThenSave(summary: string, strongWarn: string | null) {
+    if (config?.pendingSettlementCycle && config.pendingSettlementCycle !== config.settlementCycle) {
+      modal.confirm({
+        title: '确认修改结算周期？',
+        content: (
+          <div>
+            <div>当前周期：{cycleText(config.settlementCycle)}</div>
+            <div>修改后周期：{cycleText(config.pendingSettlementCycle)}</div>
+            <div>生效时间：{cycleEffectiveAt(config.settlementCycle)}</div>
+            <div>首个新账期：{cycleFirstPeriod(config.pendingSettlementCycle, config.settlementCycle)}</div>
+            <div className="field-sub" style={{ marginTop: 8 }}>新周期将在当前账期结束后生效，不影响历史账期。</div>
+          </div>
+        ),
+        okText: '确认保存',
+        cancelText: '取消',
+        onOk: () => actuallySave(summary, strongWarn),
+      });
+      return;
+    }
+    actuallySave(summary, strongWarn);
   }
 
   function handleSave() {
@@ -363,11 +462,11 @@ export default function MemberManagementPage() {
           content: `${v.strongWarn}，仍要保存吗？`,
           okText: '仍要保存',
           cancelText: '取消',
-          onOk: () => actuallySave(summary, v.strongWarn),
+          onOk: () => confirmCycleThenSave(summary, v.strongWarn),
         });
         return;
       }
-      actuallySave(summary, null);
+      confirmCycleThenSave(summary, null);
       return;
     }
     actuallySave('', null);
@@ -417,8 +516,17 @@ export default function MemberManagementPage() {
     {
       title: '状态',
       key: 'status',
-      width: 80,
-      render: (_: unknown, m: TenantMember) => <Tag color={tagColor(m.status)}>{tagText(m.status)}</Tag>,
+      width: 90,
+      render: (_: unknown, m: TenantMember) => (
+        <Switch
+          size="small"
+          checked={m.status === 'enabled'}
+          disabled={isAdminMember(m)}
+          checkedChildren="启用"
+          unCheckedChildren="禁用"
+          onChange={() => handleToggle(m)}
+        />
+      ),
     },
     {
       title: '注册时间',
@@ -440,7 +548,7 @@ export default function MemberManagementPage() {
         <Input
           allowClear
           prefix={<SearchOutlined />}
-          placeholder="姓名 / 账号 / 手机号"
+          placeholder="查询姓名、账号、手机号"
           style={{ width: 260 }}
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
@@ -448,13 +556,14 @@ export default function MemberManagementPage() {
         />
         <Select
           allowClear
-          placeholder="全部角色"
+          placeholder="角色"
           style={{ width: 160 }}
           value={roleFilter || undefined}
           options={roleOptions}
           onChange={(v) => setRoleFilter(v || '')}
         />
         <Button
+          type="link"
           icon={<ReloadOutlined />}
           onClick={() => {
             setKeyword('');
@@ -678,6 +787,7 @@ function MerchantConfigEditor(props: {
 
   const autoSplit = isSplitSettlementMode(cfg.splitMode);
   const shareToTitle = merchantPointShareLabelForMode(cfg.collectionMode);
+  const selectedCycle = cfg.pendingSettlementCycle || cfg.settlementCycle;
 
   return (
     <section className="drawer-section">
@@ -719,17 +829,49 @@ function MerchantConfigEditor(props: {
         </Radio.Group>
       </Field>
 
+      <Field label="结算周期" required error={props.formSubmitted && !selectedCycle ? '请选择结算周期' : undefined}>
+        <Radio.Group
+          value={selectedCycle}
+          onChange={(e) => {
+            const next = e.target.value;
+            if (cfg.settlementCycle) {
+              patch({
+                pendingSettlementCycle: next === cfg.settlementCycle ? undefined : next,
+                pendingCycleEffectiveAt: undefined,
+              });
+            } else {
+              patch({ settlementCycle: next });
+            }
+          }}
+        >
+          {SETTLEMENT_CYCLE_OPTIONS.map((option) => (
+            <Radio key={option.value} value={option.value}>
+              {option.label}
+              <Tooltip title={option.description}>
+                <InfoCircleOutlined style={{ marginInlineStart: 4, color: '#8F9499' }} />
+              </Tooltip>
+            </Radio>
+          ))}
+        </Radio.Group>
+        {cfg.pendingSettlementCycle ? (
+          <span className="field-sub">当前{cycleText(cfg.settlementCycle)}，{cycleText(cfg.pendingSettlementCycle)}将在当前账期结束后生效</span>
+        ) : null}
+      </Field>
+
       {autoSplit ? (
         <Field
-          label="分账接收方商户号"
+          label="分账接收方商户"
           required
-          error={props.formSubmitted && platform && !cfg.receiverMchid.trim() ? '请输入景区商家商户号' : undefined}
+          error={props.formSubmitted && platform && (!cfg.receiverMchid.trim() || !cfg.receiverMchName || cfg.receiverMchName === '未查询到') ? '请输入并查询分账接收方商户' : undefined}
         >
           {platform ? (
-            <MchidInput
+            <HuifuLookup
               value={cfg.receiverMchid}
-              placeholder="请输入景区商家商户号"
-              onChange={(v) => patch({ receiverMchid: v })}
+              merchantName={cfg.receiverMchName}
+              eligibility={cfg.splitEligibility}
+              placeholder="查询分账接收方商户"
+              onChange={(v) => patch({ receiverMchid: v, receiverMchName: '', splitEligibility: 'unsynced' })}
+              onResult={(receiverMchName, splitEligibility) => patch({ receiverMchName, splitEligibility })}
             />
           ) : (
             <MchidReadonly mchid={PLATFORM_LAKALA_RECEIVER_ACCOUNT_ID} />
@@ -742,8 +884,7 @@ function MerchantConfigEditor(props: {
       </div>
 
       <p className="share-note point-share-note">
-        <InfoCircleOutlined />
-        单点合计 ≤ 100%：收款商户自留 + {shareToTitle} + 渠道/推广；余额自动计为溢价，归收款商户。
+        各方分成比例合计 ≤ 100%，剩余比例自动计为收款商户溢价。
       </p>
 
       {rules.length === 0 && operatingPoints.length === 0 ? (
@@ -850,6 +991,7 @@ function ChannelConfigEditor(props: {
   const autoSplit = isSplitSettlementMode(cfg.splitMode);
   const customType = cfg.channelType === CUSTOM_CHANNEL_TYPE;
   const rules = normalizeMemberChannelRules(cfg.channelRules);
+  const selectedCycle = cfg.pendingSettlementCycle || cfg.settlementCycle;
 
   const rulesUpdate = (next: ChannelConfig['channelRules']) => patch({ channelRules: next });
 
@@ -897,16 +1039,48 @@ function ChannelConfigEditor(props: {
         </Radio.Group>
       </Field>
 
+      <Field label="结算周期" required error={props.formSubmitted && !selectedCycle ? '请选择结算周期' : undefined}>
+        <Radio.Group
+          value={selectedCycle}
+          onChange={(e) => {
+            const next = e.target.value;
+            if (cfg.settlementCycle) {
+              patch({
+                pendingSettlementCycle: next === cfg.settlementCycle ? undefined : next,
+                pendingCycleEffectiveAt: undefined,
+              });
+            } else {
+              patch({ settlementCycle: next });
+            }
+          }}
+        >
+          {SETTLEMENT_CYCLE_OPTIONS.map((option) => (
+            <Radio key={option.value} value={option.value}>
+              {option.label}
+              <Tooltip title={option.description}>
+                <InfoCircleOutlined style={{ marginInlineStart: 4, color: '#8F9499' }} />
+              </Tooltip>
+            </Radio>
+          ))}
+        </Radio.Group>
+        {cfg.pendingSettlementCycle ? (
+          <span className="field-sub">当前{cycleText(cfg.settlementCycle)}，{cycleText(cfg.pendingSettlementCycle)}将在当前账期结束后生效</span>
+        ) : null}
+      </Field>
+
       {autoSplit ? (
         <Field
-          label="分账接收方商户号"
+          label="分账接收方商户"
           required
-          error={props.formSubmitted && !cfg.receiverMchid.trim() ? '请输入渠道商户号' : undefined}
+          error={props.formSubmitted && (!cfg.receiverMchid.trim() || !cfg.receiverMchName || cfg.receiverMchName === '未查询到') ? '请输入并查询分账接收方商户' : undefined}
         >
-          <MchidInput
+          <HuifuLookup
             value={cfg.receiverMchid}
-            placeholder="请输入渠道商户号"
-            onChange={(v) => patch({ receiverMchid: v })}
+            merchantName={cfg.receiverMchName}
+            eligibility={cfg.splitEligibility}
+            placeholder="查询分账接收方商户"
+            onChange={(v) => patch({ receiverMchid: v, receiverMchName: '', splitEligibility: 'unsynced' })}
+            onResult={(receiverMchName, splitEligibility) => patch({ receiverMchName, splitEligibility })}
           />
         </Field>
       ) : null}

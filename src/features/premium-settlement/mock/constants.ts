@@ -27,7 +27,9 @@ export const MCHID_NAME_MAP: Record<string, string> = {
   [PLATFORM_LAKALA_RECEIVER_ACCOUNT_ID]: '自营分账接收方',
   [LKL_MERCHANT_RECV_ID]: '商家分账接收方',
   [LKL_CHANNEL_RECV_ID]: '渠道分账接收方',
-  [LKL_MERCHANT_COLLECT_ID]: '景区商家收款商户'
+  [LKL_MERCHANT_COLLECT_ID]: '景区商家收款商户',
+  lkl_promotion_recv_001: '钱塘推广分账接收方',
+  lkl_suspended_recv_001: '暂停分账演示商户'
 };
 
 export const CUSTOM_CHANNEL_TYPE = '自定义合作方';
@@ -48,6 +50,11 @@ export const COLLECTION_MODE_OPTIONS = [
 export const SPLIT_MODE_OPTIONS = [
   { value: 'thirdParty', label: '线上自动分账' },
   { value: 'system', label: '线下对公结算' },
+] as const;
+
+export const SETTLEMENT_CYCLE_OPTIONS = [
+  { value: 'weekly', label: '周结', description: '按自然周（周一至周日）生成账期' },
+  { value: 'monthly', label: '月结', description: '按自然月（每月 1 日至月末）统计，次月 20 日出账单' },
 ] as const;
 
 // —— 金额工具 ——

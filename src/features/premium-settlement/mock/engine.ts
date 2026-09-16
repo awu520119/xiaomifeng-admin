@@ -16,6 +16,7 @@ import type {
   PointShareRule,
   PromotionPartner,
   PromotionRule,
+  SettlementCycleType,
   SettlementRow,
   SettlementRowStatus,
   SplitMode,
@@ -145,7 +146,10 @@ export function defaultMerchantConfig(scenicName = TENANT_BRAND.name): MerchantC
     pointShareConfigs: [],
     merchantMch: LKL_MERCHANT_COLLECT_ID,
     receiverMchid: LKL_MERCHANT_RECV_ID,
+    receiverMchName: '',
+    splitEligibility: 'unsynced',
     platformReceiverMchid: PLATFORM_LAKALA_RECEIVER_ACCOUNT_ID,
+    settlementCycle: 'monthly',
     bankOwner: '',
     bankName: '',
     bankAccount: '',
@@ -161,6 +165,9 @@ export function defaultChannelConfig(): ChannelConfig {
     channelFundingPayer: 'platform',
     splitMode: 'system',
     receiverMchid: LKL_CHANNEL_RECV_ID,
+    receiverMchName: '',
+    splitEligibility: 'unsynced',
+    settlementCycle: 'monthly',
     bankOwner: '',
     bankName: '',
     bankAccount: '',
@@ -314,6 +321,7 @@ export interface BusinessAccount {
   roleName?: string;
   roleId?: string;
   objectType: ObjectType;
+  settlementCycle?: SettlementCycleType;
   config?: AccountConfig | null;
 }
 
@@ -356,6 +364,7 @@ export function promotionBusinessAccounts(promotions: PromotionPartner[]): Busin
     accountSource: promotionAccountSource(partner),
     roleName: `推广方 · ${splitModeText(partner.splitMode || 'system')}`,
     objectType: 'promotion' as ObjectType,
+    settlementCycle: 'monthly',
     roleId: '',
     config: null
   }));
@@ -376,6 +385,7 @@ export function tenantBusinessAccounts(members: TenantMember[], promotions: Prom
         accountSource: 'B' as 'B' | 'C',
         roleName: member.roleIds.map(role => roleNamesOf(role)).filter(Boolean).join('、'),
         objectType: config.type === 'channel' ? ('channel' as ObjectType) : ('merchant' as ObjectType),
+        settlementCycle: config.settlementCycle || 'monthly',
         roleId,
         config
       };
@@ -614,13 +624,15 @@ export function channelPointRemainState(
 
 export function memberConfigSaveSummary(config: AccountConfig): string {
   if (!config) return '';
+  const cycle = config.pendingSettlementCycle || config.settlementCycle;
+  const cycleText = cycle === 'weekly' ? '周结' : cycle === 'monthly' ? '月结' : '未配置周期';
   if (config.type === 'channel') {
     const rules = normalizeMemberChannelRules(config.channelRules);
     const total = rules.reduce((sum, rule) => sum + Number(rule.rate || 0), 0);
-    return rules.length ? `${rules.length} 条渠道规则，合计 ${roundAmount(total)}%` : '未配置渠道规则';
+    return rules.length ? `${cycleText}，${rules.length} 条渠道规则，合计 ${roundAmount(total)}%` : `${cycleText}，未配置渠道规则`;
   }
   const pr = normalizeMerchantPointShareConfigs(config.pointShareConfigs);
-  const parts = [config.collectionMode === 'merchant' ? '景区商家收款' : '自营收款'];
+  const parts = [cycleText, config.collectionMode === 'merchant' ? '景区商家收款' : '自营收款'];
   if (pr.length) parts.push(`${pr.length} 条拍摄点分成`);
   return parts.join('，');
 }
@@ -761,6 +773,9 @@ export function validateMemberConfig(
   let strongWarn: string | null = null;
   const member = currentMemberId ? members.find(item => item.id === currentMemberId) || null : null;
   if (!config) return { error: null, strongWarn };
+  if (!config.settlementCycle && !config.pendingSettlementCycle) {
+    return { error: '请选择结算周期', strongWarn };
+  }
   if (config.type === 'merchant') {
     if (!config.scenicName) return { error: '请选择景区', strongWarn };
     const baseShareLabel = merchantBaseShareLabel(config);
@@ -782,7 +797,11 @@ export function validateMemberConfig(
     if (overflow) return { error: merchantShareOverflowMessage(overflow), strongWarn };
     if (config.collectionMode === 'merchant' && !config.merchantMch.trim()) return { error: '景区商家收款需填写收款商户号', strongWarn };
     if (isSplitSettlementMode(config.splitMode) && config.collectionMode === 'platform' && !config.receiverMchid.trim()) {
-      return { error: '自营收款需填写分账接收方商户号', strongWarn };
+      return { error: '自营收款需填写汇付商户号', strongWarn };
+    }
+    if (isSplitSettlementMode(config.splitMode) && config.collectionMode === 'platform'
+      && (!config.receiverMchName || config.receiverMchName === '未查询到' || config.splitEligibility === 'unsynced')) {
+      return { error: '请查询汇付商户号并同步分账资格', strongWarn };
     }
     const pointRules = normalizeMerchantPointShareConfigs(config.pointShareConfigs);
     const coveredPoints = pointRules.map(rule => rule.point);
@@ -822,7 +841,11 @@ export function validateMemberConfig(
   if (config.type === 'channel') {
     if (config.channelType === CUSTOM_CHANNEL_TYPE && !config.customChannelType.trim()) return { error: '请填写具体渠道类型', strongWarn };
     if (isSplitSettlementMode(config.splitMode) && !config.receiverMchid.trim()) {
-      return { error: `${splitModeText(config.splitMode)}需填写分账接收方商户号`, strongWarn };
+      return { error: `${splitModeText(config.splitMode)}需填写汇付商户号`, strongWarn };
+    }
+    if (isSplitSettlementMode(config.splitMode)
+      && (!config.receiverMchName || config.receiverMchName === '未查询到' || config.splitEligibility === 'unsynced')) {
+      return { error: '请查询汇付商户号并同步分账资格', strongWarn };
     }
     const channelRules = normalizeMemberChannelRules(config.channelRules);
     const invalidRule = channelRules.find(rule => !channelRuleShootPoints(rule).length || !Number.isFinite(rule.rate) || rule.rate < 0 || rule.rate > 100);
@@ -914,6 +937,7 @@ export function validatePromotion(
     id: string;
     name: string; contact: string; phone: string; licenseName: string;
     bankOwner: string; bankName: string; bankAccount: string; bankBranch: string;
+    splitMode: SplitMode;
     rules: PromotionRule[];
   },
   members: TenantMember[],
@@ -929,6 +953,7 @@ export function validatePromotion(
   if (!draft.bankName.trim()) errors.push('请填写银行名称');
   if (!draft.bankAccount.trim()) errors.push('请填写银行账号');
   if (!draft.bankBranch.trim()) errors.push('请填写开户行地址');
+  if (draft.splitMode !== 'system') errors.push('推广方仅支持线下对公结算');
   const seenPoints = new Set<string>();
   const merchant = merchantBusinessAccounts(members)[0];
   const merchantConfig = merchant && merchant.config && merchant.config.type === 'merchant' ? merchant.config : undefined;
@@ -1528,6 +1553,38 @@ function aggregateOrderSplitStatus(orders: Order[]): SettlementRowStatus {
   return '待分账';
 }
 
+function settlementPeriodMeta(cycleType: SettlementCycleType, offset = 0): {
+  label: string;
+  start: string;
+  end: string;
+} {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const dateText = (date: Date) => `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+  if (cycleType === 'weekly') {
+    const start = new Date(Date.UTC(2026, 4, 18 + offset * 7));
+    const end = new Date(Date.UTC(2026, 4, 25 + offset * 7));
+    const displayEnd = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+    return {
+      label: `${dateText(start)}～${dateText(displayEnd)}`,
+      start: `${dateText(start)} 00:00`,
+      end: `${dateText(end)} 00:00`,
+    };
+  }
+  const start = new Date(Date.UTC(2026, 4 + offset, 1));
+  const end = new Date(Date.UTC(2026, 5 + offset, 1));
+  return {
+    label: `${start.getUTCFullYear()}-${pad(start.getUTCMonth() + 1)}`,
+    start: `${dateText(start)} 00:00`,
+    end: `${dateText(end)} 00:00`,
+  };
+}
+
+function historyPeriodOffset(period: string): number {
+  const match = /^(\d{4})-(\d{2})$/.exec(period);
+  if (!match) return -1;
+  return (Number(match[1]) - 2026) * 12 + Number(match[2]) - 5;
+}
+
 /** 从订单自建账户（无成员/推广时退路，供仅传 orders 的页面使用） */
 function accountsFromOrders(orders: Order[]): BusinessAccount[] {
   const map = new Map<string, BusinessAccount>();
@@ -1584,17 +1641,21 @@ export function buildSettlementRows(
     invoiceFiles: InvoiceFile[] = [],
     statusReason = ''
   ): SettlementRow => {
+    const periodMeta = settlementPeriodMeta(row.cycleType, historyPeriodOffset(period));
     const income = roundAmount(row.income * factor);
     const feeAmount = settlementFeeAmount(income);
     const netAmount = settlementNetAmount(income, row.feeRate);
     const payable = roundAmount(row.payable * factor);
-    const premiumAmount = roundAmount(row.premiumAmount * factor);
+    const premiumAmount = row.objectType === 'merchant' ? roundAmount(row.premiumAmount * factor) : 0;
     return {
       ...row,
       id: `${view}-${row.account.id}-${suffix}`,
-      period,
+      period: periodMeta.label,
+      periodStart: periodMeta.start,
+      periodEnd: periodMeta.end,
+      isEstimated: false,
       businessDate: '',
-      fundingMode: 'offline_settlement' as FundingMode,
+      fundingMode: row.fundingMode,
       status,
       invoiceStatus,
       invoiceFiles,
@@ -1606,7 +1667,9 @@ export function buildSettlementRows(
       premiumAmount,
       detailFactor: factor,
       statusReason,
-      settledAmount: isSplitSettlementMode(settlementViewMode(view)) ? payable : row.settledAmount
+      settledAmount: isSplitSettlementMode(settlementViewMode(view)) ? payable : row.settledAmount,
+      reversedAmount: isSplitSettlementMode(settlementViewMode(view)) ? 0 : row.reversedAmount,
+      netSettledAmount: isSplitSettlementMode(settlementViewMode(view)) ? payable : row.netSettledAmount
     };
   };
 
@@ -1618,10 +1681,11 @@ export function buildSettlementRows(
     const feeAmount = roundAmount(ordersInRow.reduce((sum, order) => sum + Number((order as unknown as { settlementFeeAmount?: number }).settlementFeeAmount || 0), 0));
     const netAmount = roundAmount(ordersInRow.reduce((sum, order) => sum + Number((order as unknown as { netSettlementBase?: number }).netSettlementBase || 0), 0));
     const payable = roundAmount(matched.reduce((sum, item) => sum + settlementObjectAmount(item.order, account), 0));
-    const premiumAmount = roundAmount(matched.reduce((sum, item) => {
+    const rawPremiumAmount = roundAmount(matched.reduce((sum, item) => {
       const share = settlementShareForAccount(item.order, account);
       return sum + Number(share && share.premiumAmount || 0);
     }, 0));
+    const premiumAmount = account.objectType === 'merchant' ? rawPremiumAmount : 0;
     const settledAmount = fundingMode === 'order_split'
       ? roundAmount(matched.reduce((sum, item) => sum + (item.order.splitStatus === '已分账' ? settlementObjectAmount(item.order, account) : 0), 0))
       : 0;
@@ -1638,11 +1702,17 @@ export function buildSettlementRows(
     const status: SettlementRowStatus = fundingMode === 'order_split'
       ? aggregateOrderSplitStatus(ordersInRow)
       : (account.objectType === 'merchant' && hasMerchantDirectOrder ? '出账中' : '待申请');
+    const cycleType = account.settlementCycle || (account.config && account.config.settlementCycle) || 'monthly';
+    const periodMeta = settlementPeriodMeta(cycleType);
     return {
       id: `${view}-${account.id}-current`,
       view,
       detailFactor: 1,
-      period: currentPeriod,
+      period: periodMeta.label || currentPeriod,
+      cycleType,
+      periodStart: periodMeta.start,
+      periodEnd: periodMeta.end,
+      isEstimated: true,
       businessDate: '',
       fundingMode,
       account,
@@ -1683,10 +1753,21 @@ export function buildSettlementRows(
     if (row) rows.push(row);
   });
 
+  if (method === 'thirdParty') {
+    const weeklyRow = rows.find(row => row.cycleType === 'weekly');
+    if (weeklyRow) {
+      rows.push(derivedBillRow(weeklyRow, 'weekly-paid-1', '2026-04', '已分账', '无需发票', 0.78));
+      rows.push(derivedBillRow(weeklyRow, 'weekly-paid-2', '2026-03', '已分账', '无需发票', 0.66));
+    }
+  }
+
   if (method === 'system') {
     const merchantRow = rows.find(row => row.objectType === 'merchant');
     const channelRow = rows.find(row => row.objectType === 'channel');
-    const promotionRow = rows.find(row => row.objectType === 'promotion');
+    // 推广方账期仅在独立“推广方结算”页签展示，线下对公列表不混入推广方对象。
+    const promotionRow = view === 'promotion'
+      ? rows.find(row => row.objectType === 'promotion' && row.accountSource === 'C')
+      : undefined;
     if (merchantRow) {
       merchantRow.invoiceStatus = '已上传 2 个文件';
       merchantRow.invoiceFiles = [
@@ -1712,7 +1793,7 @@ export function buildSettlementRows(
       ]));
       rows.push(derivedBillRow(channelRow, 'rejected', '2026-01', '已驳回', '暂无发票', 0.46, [], '发票金额与应结算金额不一致'));
     }
-    if (promotionRow && view === 'promotion') {
+    if (promotionRow) {
       rows.push(derivedBillRow(promotionRow, 'paid', '2026-04', '已打款', '已上传 1 个文件', 0.74, [
         { name: '2026-04-推广服务费发票.pdf', type: 'application/pdf', size: 728000, uploadedAt: '2026-05-02 10:20:00', content: '模拟发票文件' }
       ]));
@@ -1723,6 +1804,7 @@ export function buildSettlementRows(
   }
 
   return rows.filter(row => {
+    if (view === 'offline' && row.objectType === 'promotion') return false;
     if (view === 'promotion') {
       if (row.objectType !== 'promotion' || row.accountSource !== 'C') return false;
     } else if (row.accountSource === 'C') {
@@ -1758,7 +1840,9 @@ export function billOrderDisplay(bill: SettlementRow, order: Order, factor: numb
   const amount = roundAmount(Number(order.paidAmount ?? order.amount ?? 0) * detailFactor);
   const share = settlementShareForAccount(order, bill.account);
   const payable = share ? roundAmount(Number(share.amount || 0) * detailFactor) : 0;
-  const premiumAmount = share ? roundAmount(Number(share.premiumAmount || 0) * detailFactor) : 0;
+  const premiumAmount = bill.objectType === 'merchant' && share
+    ? roundAmount(Number(share.premiumAmount || 0) * detailFactor)
+    : 0;
   const calculation = settlementOrderCalculation(order, share, detailFactor);
   const isSplit = settlementViewFundingMode(bill.view) === 'order_split';
   const splitSettledAmount = isSplit && share && order.splitStatus === '已分账'
@@ -1799,10 +1883,11 @@ export function billMetrics(bill: SettlementRow, orders: Order[]): {
     if (!share) return sum;
     return sum + Number(share.amount || 0) * detailFactor;
   }, 0));
-  const premiumAmount = roundAmount((orders || []).reduce((sum, order) => {
+  const rawPremiumAmount = roundAmount((orders || []).reduce((sum, order) => {
     const share = settlementShareForAccount(order, bill.account);
     return sum + Number(share && share.premiumAmount || 0) * detailFactor;
   }, 0));
+  const premiumAmount = bill.objectType === 'merchant' ? rawPremiumAmount : 0;
   const isSplit = settlementViewFundingMode(bill.view) === 'order_split';
   const settledAmount = isSplit
     ? roundAmount((orders || []).reduce((sum, order) => {

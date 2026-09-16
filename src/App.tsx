@@ -15,11 +15,13 @@ import PromotionManagementPage from './features/premium-settlement/pages/Promoti
 import SettlementPage from './features/premium-settlement/pages/SettlementPage';
 import BillDetailPage from './features/premium-settlement/pages/BillDetailPage';
 import OrderListPage from './features/premium-settlement/pages/OrderListPage';
+import SettlementApprovalPage from './features/premium-settlement/pages/SettlementApprovalPage';
 
 const { Header, Sider, Content } = Layout;
 
 const NAV_ITEMS = [
   { key: '/orders', label: '订单管理', icon: <OrderedListOutlined /> },
+  { key: '/settlement/approval', label: '结算审批', icon: <AccountBookOutlined /> },
   { key: '/settlement', label: '结算中心', icon: <AccountBookOutlined /> },
   { key: '/members', label: '成员管理', icon: <TeamOutlined /> },
   { key: '/promotion', label: '推广方管理', icon: <ShopOutlined /> },
@@ -35,6 +37,9 @@ function pageTitle(pathname: string): string {
   // 账单详情把页标题替换为“{结算方式}详情”
   const bill = pathname.match(/^\/settlement\/bill\/(thirdParty|offline|promotion)\//);
   if (bill && BILL_DETAIL_TITLE[bill[1]]) return BILL_DETAIL_TITLE[bill[1]];
+  const approvalBill = pathname.match(/^\/settlement\/approval\/bill\/(thirdParty|offline|promotion)\//);
+  if (approvalBill) return '结算审批详情';
+  if (pathname.startsWith('/settlement/approval')) return '结算审批';
   if (pathname.startsWith('/settlement')) return '结算中心';
   if (pathname.startsWith('/orders')) return '订单管理';
   if (pathname.startsWith('/members')) return '成员管理';
@@ -102,6 +107,8 @@ export default function App() {
               <Route path="/members" element={<MemberManagementPage />} />
               <Route path="/promotion" element={<PromotionManagementPage />} />
               <Route path="/settlement/bill/:view/:billId" element={<BillDetailPage />} />
+              <Route path="/settlement/approval/bill/:view/:billId" element={<BillDetailPage />} />
+              <Route path="/settlement/approval" element={<SettlementApprovalPage />} />
               <Route path="/settlement" element={<SettlementPage />} />
               <Route path="/" element={<Navigate to="/members" replace />} />
               <Route path="*" element={<Navigate to="/members" replace />} />

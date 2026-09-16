@@ -1,5 +1,5 @@
 import { PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
-import { App, Button, Drawer, Input, InputNumber, Modal, Radio, Select, Space, Table, Tabs, Tag, Upload } from 'antd';
+import { App, Button, Drawer, Input, InputNumber, Modal, Radio, Select, Space, Switch, Table, Tabs, Tag, Upload } from 'antd';
 import type { TableProps } from 'antd';
 import { useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
@@ -14,7 +14,6 @@ import { useShare } from '../mock/store';
 import type { PromotionPartner, PromotionRule } from '../mock/types';
 
 const { useApp } = App;
-
 interface RuleRow {
   id: string;
   point: string;
@@ -80,6 +79,10 @@ export default function PromotionManagementPage() {
       bankBranch: '',
       splitMode: 'system',
       integrationStatus: 'integrated',
+      receiverMchid: '',
+      receiverMchName: '',
+      splitEligibility: 'unsynced',
+      settlementCycle: 'monthly',
       rules: [],
     };
   }
@@ -97,7 +100,7 @@ export default function PromotionManagementPage() {
   function openEdit(partner: PromotionPartner) {
     setEditing(partner);
     setMode('edit');
-    setDraft({ ...partner, rules: [...(partner.rules || [])] });
+    setDraft({ ...partner, splitMode: 'system', settlementCycle: 'monthly', pendingSettlementCycle: undefined, pendingCycleEffectiveAt: undefined, rules: [...(partner.rules || [])] });
     setRows(
       partner.rules && partner.rules.length
         ? partner.rules.map((r) => ({ id: r.id || blankRow().id, point: r.point, rate: r.rate }))
@@ -112,7 +115,7 @@ export default function PromotionManagementPage() {
   function openAudit(partner: PromotionPartner) {
     setEditing(partner);
     setMode('audit');
-    setDraft({ ...partner, rules: [...(partner.rules || [])] });
+    setDraft({ ...partner, splitMode: 'system', settlementCycle: 'monthly', pendingSettlementCycle: undefined, pendingCycleEffectiveAt: undefined, rules: [...(partner.rules || [])] });
     setRows(
       partner.rules && partner.rules.length
         ? partner.rules.map((r) => ({ id: r.id || blankRow().id, point: r.point, rate: r.rate }))
@@ -128,9 +131,13 @@ export default function PromotionManagementPage() {
     if (!editing) return;
     const next: PromotionPartner = {
       ...editing,
+      splitMode: 'system',
       auditStatus: 'approved',
       status: 'enabled',
       integrationStatus: 'integrated',
+      settlementCycle: 'monthly',
+      pendingSettlementCycle: undefined,
+      pendingCycleEffectiveAt: undefined,
       rejectReason: undefined,
     };
     savePromotion(next);
@@ -153,6 +160,10 @@ export default function PromotionManagementPage() {
     if (!editing) return;
     const next: PromotionPartner = {
       ...editing,
+      splitMode: 'system',
+      settlementCycle: 'monthly',
+      pendingSettlementCycle: undefined,
+      pendingCycleEffectiveAt: undefined,
       auditStatus: 'rejected',
       status: 'disabled',
       integrationStatus: 'rejected',
@@ -224,6 +235,7 @@ export default function PromotionManagementPage() {
         bankName: draft.bankName,
         bankAccount: draft.bankAccount,
         bankBranch: draft.bankBranch,
+        splitMode: 'system',
         rules: ruleList as PromotionRule[],
       },
       members,
@@ -249,14 +261,23 @@ export default function PromotionManagementPage() {
       bankName: draft.bankName.trim(),
       bankAccount: draft.bankAccount.trim(),
       bankBranch: draft.bankBranch.trim(),
-      splitMode: draft.splitMode,
+      splitMode: 'system',
       integrationStatus: wasRejected ? 'pending' : 'integrated',
+      receiverMchid: '',
+      receiverMchName: '',
+      splitEligibility: 'unsynced',
+      settlementCycle: 'monthly',
+      pendingSettlementCycle: undefined,
+      pendingCycleEffectiveAt: undefined,
       rejectReason: undefined,
       rules: ruleList,
     };
-    savePromotion(next);
-    setDrawerOpen(false);
-    message.success(wasRejected ? '修改已保存，推广方已重新提交审核' : isNew ? '推广方已创建' : '推广方已更新');
+    const finishSave = () => {
+      savePromotion(next);
+      setDrawerOpen(false);
+      message.success(wasRejected ? '修改已保存，推广方已重新提交审核' : isNew ? '推广方已创建' : '推广方已更新');
+    };
+    finishSave();
   }
 
   const renderSwitch = (p: PromotionPartner) => {
@@ -265,14 +286,15 @@ export default function PromotionManagementPage() {
     const disableTitle =
       p.auditStatus === 'pending' ? '待审核，审核通过后启用' : p.auditStatus === 'rejected' ? '已驳回，需重新提交' : '未通过审核，不可启用';
     return (
-      <span
-        className={`promotion-switch${isOn ? ' is-on' : ''}${disabled ? ' is-disabled' : ''}`}
-        title={disabled ? disableTitle : isOn ? '点击禁用' : '点击启用'}
-        onClick={() => {
-          if (!disabled) handleToggle(p);
-        }}
-      >
-        {isOn ? '启用' : '禁用'}
+      <span title={disabled ? disableTitle : undefined}>
+        <Switch
+          size="small"
+          checked={isOn}
+          disabled={disabled}
+          checkedChildren="启用"
+          unCheckedChildren="禁用"
+          onChange={() => handleToggle(p)}
+        />
       </span>
     );
   };
@@ -370,7 +392,7 @@ export default function PromotionManagementPage() {
         <Input
           allowClear
           prefix={<SearchOutlined />}
-          placeholder="推广方名称 / 联系人 / 手机号"
+          placeholder="查询推广方名称、联系人、手机号"
           style={{ width: 260 }}
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
@@ -387,6 +409,7 @@ export default function PromotionManagementPage() {
           onChange={(v) => setStatusFilter(v || '')}
         />
         <Button
+          type="link"
           icon={<ReloadOutlined />}
           onClick={() => {
             setKeyword('');
@@ -526,7 +549,6 @@ function PromotionForm(props: {
   const readOnly = Boolean(props.readOnly);
   const [licenseError, setLicenseError] = useState('');
   const patch = (p: Partial<PromotionPartner>) => props.setDraft({ ...draft, ...p });
-
   const merchantConfig = useMemo(() => {
     for (const m of props.members) {
       if (m.accountConfig && m.accountConfig.type === 'merchant') return m.accountConfig;
@@ -656,13 +678,18 @@ function PromotionForm(props: {
           <span className="cell-subtitle">（非必填）</span>
         </h4>
         <Field label="分账方式">
-          <Radio.Group disabled={readOnly} value={draft.splitMode} onChange={(e) => patch({ splitMode: e.target.value })}>
+          <Radio.Group disabled={readOnly} value="system" onChange={(e) => patch({ splitMode: e.target.value })}>
             {SPLIT_MODE_OPTIONS.map((o) => (
-              <Radio key={o.value} value={o.value}>
+              <Radio key={o.value} value={o.value} disabled={o.value === 'thirdParty'}>
                 {o.label}
               </Radio>
             ))}
           </Radio.Group>
+          <span className="field-sub">推广方仅支持线下对公结算。</span>
+        </Field>
+
+        <Field label="出账规则">
+          <span className="readonly-box">统一月结，每月 20 日生成上月账单</span>
         </Field>
 
         <Field label="分成规则">

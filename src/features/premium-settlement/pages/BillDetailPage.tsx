@@ -2,7 +2,7 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 import { App, Button, Modal, Select, Table, Tag } from 'antd';
 import type { TableProps } from 'antd';
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { moneyText, tagColor } from '../mock/constants';
 import { billMetrics, billOrderDisplay, billScenicOptions, buildSettlementRows, filterBillOrders, tenantBusinessAccounts } from '../mock/engine';
 import { useShare } from '../mock/store';
@@ -23,10 +23,10 @@ export default function BillDetailPage() {
   const { view, billId } = useParams<{ view: ViewKey; billId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { message } = useApp();
-  const { members, promotions, orders, billOverrides } = useShare();
+  const { members, promotions, orders, billOverrides, retryFunding: submitFundingRetry } = useShare();
   const [scenic, setScenic] = useState('');
-  const [retrySubmitted, setRetrySubmitted] = useState<Record<string, 'split' | 'reversal'>>({});
 
   const row = useMemo(() => {
     const key: ViewKey = view === 'promotion' || view === 'thirdParty' ? view : 'offline';
@@ -43,23 +43,19 @@ export default function BillDetailPage() {
   const metrics = row ? billMetrics(row, shownOrders) : null;
 
   const isSplit = row && (row.view === 'thirdParty' || row.fundingMode === 'order_split');
-  const lastAmountTitle = '应结算金额';
+  const supportsPremium = row?.objectType === 'merchant';
+  const lastAmountTitle = view === 'promotion' ? '应分成金额' : '应结算金额';
   const title = settlementDetailTitle(view || '');
   const requestedPerspective = searchParams.get('perspective');
   const detailPerspective: DetailPerspective = ['channel', 'merchant', 'promotion'].includes(requestedPerspective || '')
     ? requestedPerspective as DetailPerspective
     : 'self';
+  const backPath = location.pathname.startsWith('/settlement/approval/') || searchParams.get('from') === 'approval' ? '/settlement/approval' : '/settlement';
   const canRetrySplit = detailPerspective === 'self';
 
   const openOrderDetail = (order: Order) => {
     message.info(`订单 ${order.orderNo}：订单详情属「订单管理」模块，本演示未实现`);
   };
-
-  const displayOrder = (order: Order): Order => retrySubmitted[order.id] === 'reversal'
-    ? { ...order, reversalStatus: '待回退', fundingFailReason: '' }
-    : retrySubmitted[order.id] === 'split'
-      ? { ...order, splitStatus: '待分账', fundingFailReason: '' }
-    : order;
 
   const retrySplit = (order: Order) => {
     if (!canRetrySplit) {
@@ -71,7 +67,8 @@ export default function BillDetailPage() {
       content: (
         <div>
           <div>订单号：{order.orderNo}</div>
-          <div>分账金额：￥{moneyText(row ? billOrderDisplay(row, order, row.detailFactor || 1).payable : 0)}</div>
+          <div>{order.reversalStatus === '回退失败' ? '回退金额' : '分账金额'}：￥{moneyText(row ? billOrderDisplay(row, order, row.detailFactor || 1).payable : 0)}</div>
+          <div>收款方：{row ? `${row.account.account}（${row.account.name}）` : '-'}</div>
           <div>失败原因：{order.fundingFailReason || '未返回失败原因'}</div>
         </div>
       ),
@@ -79,7 +76,7 @@ export default function BillDetailPage() {
       cancelText: '取消',
       onOk: () => {
         const action = order.reversalStatus === '回退失败' ? 'reversal' : 'split';
-        setRetrySubmitted((current) => ({ ...current, [order.id]: action }));
+        submitFundingRetry(order.id, action);
         message.success(`订单 ${order.orderNo} 已提交${action === 'reversal' ? '重试回退' : '重试分账'}`);
       },
     });
@@ -137,7 +134,9 @@ export default function BillDetailPage() {
           return (
             <div className="rule-detail-cell">
               <span className="rule-text">{d.calculationText}</span>
-              <span className="premium-detail">基础 ￥{moneyText(d.payable - d.premiumAmount)} + 溢价 ￥{moneyText(d.premiumAmount)}</span>
+              {supportsPremium ? (
+                <span className="premium-detail">基础 ￥{moneyText(d.payable - d.premiumAmount)} + 溢价 ￥{moneyText(d.premiumAmount)}</span>
+              ) : null}
             </div>
           );
         },
@@ -170,8 +169,7 @@ export default function BillDetailPage() {
           key: 'splitStatus',
           width: 230,
           render: (_: unknown, order: Order) => {
-            const currentOrder = displayOrder(order);
-            const d = billOrderDisplay(row, currentOrder, row.detailFactor || 1);
+            const d = billOrderDisplay(row, order, row.detailFactor || 1);
             if (d.splitStatusText === '-') return <span className="invoice-empty">-</span>;
             const isFailed = ['分账失败', '回退失败'].includes(d.splitStatusText);
             return (
@@ -195,13 +193,13 @@ export default function BillDetailPage() {
     }
     return common;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [row, isSplit, lastAmountTitle, retrySubmitted, canRetrySplit]);
+  }, [row, isSplit, supportsPremium, lastAmountTitle, canRetrySplit]);
 
   if (!row) {
     return (
       <div className="admin-page">
         <section className="white-card detail-empty">
-          未找到该账单，<a onClick={() => navigate('/settlement')}>返回结算中心</a>
+          未找到该账单，<a onClick={() => navigate(backPath)}>返回{backPath === '/settlement/approval' ? '结算审批' : '结算中心'}</a>
         </section>
       </div>
     );
@@ -211,21 +209,30 @@ export default function BillDetailPage() {
     <div className="admin-page settlement-detail-page">
       <section className="white-card detail-top">
         <div className="detail-breadcrumb">
-          <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/settlement')}>
+          <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate(backPath)}>
             返回
           </Button>
           <span className="detail-sep">/</span>
           <span className="detail-page-title">{title}</span>
           <span className="detail-meta">
-            {row.period} · {row.account.account}（{row.account.name}）
+            {row.account.account}（{row.account.name}）
           </span>
         </div>
 
         {metrics ? (
           <div className="bill-hero">
             <div className="bill-hero-top">
-              <span className="bill-period">{row.period}</span>
+              <div className="bill-period-heading">
+                <Tag color={row.cycleType === 'weekly' ? 'processing' : 'default'} className="bill-cycle-tag">
+                  {row.cycleType === 'weekly' ? '周结' : '月结'}
+                </Tag>
+                <span className="bill-period">{row.cycleType === 'monthly' ? row.period.replace(/^(\d{4})-(\d{2})$/, '$1年$2月') : row.period}</span>
+              </div>
               <Tag color={tagColor(row.status)} className="bill-pill">{row.status}</Tag>
+            </div>
+            <div className="bill-period-range-line">
+              <span className="bill-period-range-label">统计范围</span>
+              <span className="bill-period-range-value">{row.periodStart} — {row.periodEnd}</span>
             </div>
             <div className="bill-summary-layout">
               <div className="bill-scope-filter">
@@ -252,16 +259,20 @@ export default function BillDetailPage() {
               <span className="metric-label">退款金额合计</span>
               <span className="metric-value">￥{moneyText(metrics.refundAmount)}</span>
             </div>
-            <div className="metric-divider" />
-            <div className="metric-item">
-              <span className="metric-label">基础分成金额</span>
-              <span className="metric-value">￥{moneyText(metrics.baseShareAmount)}</span>
-            </div>
-            <div className="metric-divider" />
-            <div className="metric-item">
-              <span className="metric-label">溢价</span>
-              <span className="metric-value premium">￥{moneyText(metrics.premiumAmount)}</span>
-            </div>
+            {supportsPremium ? (
+              <>
+                <div className="metric-divider" />
+                <div className="metric-item">
+                  <span className="metric-label">基础分成金额</span>
+                  <span className="metric-value">￥{moneyText(metrics.baseShareAmount)}</span>
+                </div>
+                <div className="metric-divider" />
+                <div className="metric-item">
+                  <span className="metric-label">溢价</span>
+                  <span className="metric-value premium">￥{moneyText(metrics.premiumAmount)}</span>
+                </div>
+              </>
+            ) : null}
             <div className="metric-divider" />
             <div className="metric-item">
               <span className="metric-label">{lastAmountTitle}</span>
