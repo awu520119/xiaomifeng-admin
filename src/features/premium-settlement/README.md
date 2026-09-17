@@ -25,6 +25,7 @@
 | 结算中心 | `pages/SettlementPage.tsx` |
 | 结算审批 | `pages/SettlementApprovalPage.tsx` |
 | 账单详情 | `pages/BillDetailPage.tsx` |
+| 独立演示页（分账/回退失败） | `pages/FundingScenarioPage.tsx` |
 
 ## 迭代记录
 
@@ -39,3 +40,7 @@
 - 账期详情按视角模拟权限：自营管理员/财务可查看全部并二次确认重试分账，景区商家、渠道和推广方仅查看本人范围。
 - 订单列表统计区采用横向汇总布局，支持右上角“收起/展开”；收起后不影响订单筛选与列表操作。
 - 新增结算审批页，按景区商家/渠道/推广方三类对象展示结算申请，仅保留审核中、打款中、已打款、已驳回状态；线上自动分账不进入审批列表，并支持明细跳转与审核/打款二次确认；仅自营管理员与财务角色可访问。
+- 重试按渠道特性走通到终态：回退走垫资、结果同步返回，确认后分账状态直接「已回退」、订单转「已退款」；重试分账先转「待分账」，约 1.2 秒后转「已分账」。重试改写的是订单 seed（`orderSeeds` + `buildOrdersFromSeeds`），由 `createTenantOrder` 重算退款金额、回退金额、已分账净额等派生字段。
+- 订单详情正文抽到 `pages/OrderDetailSections.tsx`，订单管理抽屉与两个独立演示页共用同一份实现。
+- 新增 `#/demo/funding/split`（分账失败，订单 `2026052414111900016`）与 `#/demo/funding/reversal`（回退失败，订单 `2026092413282700030`）两个不套后台外壳的独立整页；`npm run demo:order-detail` 会额外导出 `dist/order-detail-{split,reversal}-failure.html`，双击即落在对应订单详情。
+- 两个独立演示页用**真实的 antd Drawer** 渲染详情，再由 `.demo-drawer-host` 下的样式把面板从浮层摊平成文档流里的整页面板，而不是另写一套外观。这样 header、分区、`Descriptions`、`Tag`、footer 与「订单管理」右侧抽屉逐像素同源，只有定位规则不同；面板宽度锁 800px（与抽屉一致），页面居中。

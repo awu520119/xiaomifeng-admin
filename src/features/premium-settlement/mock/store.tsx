@@ -1,8 +1,10 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { BillOverrideState, MemberStatus, Order, PromotionPartner, TenantMember } from './types';
 import { INITIAL_MEMBERS, INITIAL_PROMOTIONS } from './data';
-import { buildOrders } from './engine';
+import { FUNDING_RETRY_SETTLE_MS } from './constants';
+import { buildOrdersFromSeeds, orderSeeds } from './engine';
+import type { OrderSeed } from './engine';
 
 interface ShareStoreValue {
   members: TenantMember[];
@@ -27,12 +29,18 @@ export function ShareProvider({ children }: { children: ReactNode }) {
   const [members, setMembers] = useState<TenantMember[]>(INITIAL_MEMBERS);
   const [promotions, setPromotions] = useState<PromotionPartner[]>(INITIAL_PROMOTIONS);
   const [billOverrides, setBillOverrides] = useState<Record<string, BillOverrideState>>({});
-  const [fundingOverrides, setFundingOverrides] = useState<Record<string, Partial<Order>>>({});
+  /** 重试后对订单 seed 的改写；打在 seed 上，createTenantOrder 重算全部派生字段 */
+  const [seedOverrides, setSeedOverrides] = useState<Record<string, Partial<OrderSeed>>>({});
+  const settleTimers = useRef<number[]>([]);
 
-  const orders = useMemo(
-    () => buildOrders(members, promotions).map((order) => ({ ...order, ...(fundingOverrides[order.id] || {}) })),
-    [members, promotions, fundingOverrides],
-  );
+  useEffect(() => () => { settleTimers.current.forEach(clearTimeout); }, []);
+
+  const orders = useMemo(() => {
+    const seeds = orderSeeds(members, promotions).map((seed) => (
+      seedOverrides[seed.id] ? { ...seed, ...seedOverrides[seed.id] } : seed
+    ));
+    return buildOrdersFromSeeds(seeds, members, promotions);
+  }, [members, promotions, seedOverrides]);
 
   const value = useMemo<ShareStoreValue>(() => {
     const upsertMember = (member: TenantMember) => {
@@ -72,13 +80,26 @@ export function ShareProvider({ children }: { children: ReactNode }) {
       billOverrides,
       applyBill: (billId, patch) =>
         setBillOverrides((cur) => ({ ...cur, [billId]: { ...cur[billId], ...patch } })),
-      retryFunding: (orderId, action) =>
-        setFundingOverrides((cur) => ({
+      retryFunding: (orderId, action) => {
+        if (action === 'reversal') {
+          // 回退走垫资、同步返回：提交即回退成功，退款随之完成（订单转「已退款」由 seed 推导出退款金额）
+          setSeedOverrides((cur) => ({
+            ...cur,
+            [orderId]: { ...(cur[orderId] || {}), status: '已退款', reversalStatus: '已回退', fundingFailReason: '' },
+          }));
+          return;
+        }
+        setSeedOverrides((cur) => ({
           ...cur,
-          [orderId]: action === 'reversal'
-            ? { ...(cur[orderId] || {}), reversalStatus: '待回退', fundingFailReason: '' }
-            : { ...(cur[orderId] || {}), splitStatus: '待分账', fundingFailReason: '' },
-        })),
+          [orderId]: { ...(cur[orderId] || {}), splitStatus: '待分账', fundingFailReason: '' },
+        }));
+        settleTimers.current.push(window.setTimeout(() => {
+          setSeedOverrides((cur) => ({
+            ...cur,
+            [orderId]: { ...(cur[orderId] || {}), splitStatus: '已分账' },
+          }));
+        }, FUNDING_RETRY_SETTLE_MS));
+      },
     };
   }, [members, promotions, orders, billOverrides]);
 

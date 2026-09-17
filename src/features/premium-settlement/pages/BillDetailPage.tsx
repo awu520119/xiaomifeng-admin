@@ -3,7 +3,7 @@ import { App, Button, Modal, Select, Table, Tag } from 'antd';
 import type { TableProps } from 'antd';
 import { useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { moneyText, tagColor } from '../mock/constants';
+import { FUNDING_RETRY_SETTLE_MS, moneyText, tagColor } from '../mock/constants';
 import { billMetrics, billOrderDisplay, billScenicOptions, buildSettlementRows, filterBillOrders, tenantBusinessAccounts } from '../mock/engine';
 import { useShare } from '../mock/store';
 import type { Order, SettlementRow } from '../mock/types';
@@ -77,7 +77,12 @@ export default function BillDetailPage() {
       onOk: () => {
         const action = order.reversalStatus === '回退失败' ? 'reversal' : 'split';
         submitFundingRetry(order.id, action);
-        message.success(`订单 ${order.orderNo} 已提交${action === 'reversal' ? '重试回退' : '重试分账'}`);
+        if (action === 'reversal') {
+          message.success(`订单 ${order.orderNo} 回退成功，退款已完成`);
+          return;
+        }
+        message.success(`订单 ${order.orderNo} 已提交重试分账`);
+        window.setTimeout(() => message.success(`订单 ${order.orderNo} 分账成功`), FUNDING_RETRY_SETTLE_MS);
       },
     });
   };

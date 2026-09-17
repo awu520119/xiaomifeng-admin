@@ -1721,3 +1721,89 @@ select {
 .point-rule-body .drawer-form-item {
   margin-bottom: 0;
 }
+
+/* ============ 独立演示页（不套后台外壳，导出单文件 HTML 用） ============ */
+/* .admin-page 的 min-height 是按「有顶部标题栏」算的，独立页没有外壳，这里改回满屏 */
+.demo-detail-page {
+  min-height: 100vh;
+  padding: 32px 24px 48px;
+  background: #f5f5f5;
+}
+
+/* 与「订单管理」右侧抽屉同宽，正文排版逐像素一致 */
+.demo-detail-page > * {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* 把真正的 antd Drawer 从浮层改造成文档流里的面板：绝对定位改相对、按内容撑高。
+   header / body / footer 与正文字号全部沿用 antd 与原抽屉的既有样式，这里只改定位。
+   选择器写到 4 层，是为了压过 antd 的 `.ant-drawer-right > .ant-drawer-content-wrapper`。 */
+.demo-detail-page .demo-drawer-host {
+  position: relative;
+}
+
+.demo-detail-page .demo-drawer-host .ant-drawer {
+  position: relative;
+  inset: auto;
+}
+
+.demo-detail-page .demo-drawer-host .ant-drawer > .ant-drawer-content-wrapper {
+  position: relative;
+  inset: auto;
+  width: 100% !important;
+  max-width: 100%;
+  box-shadow: none;
+  /* 静态页不需要滑入动画；同时兜住动画未跑完时面板停在屏幕外的风险 */
+  transform: none !important;
+  transition: none;
+  /* rc-motion 在入场动画跑完前给这层挂 inline display:none。演示页把动画停了，
+     动画就不会有「跑完」的那一刻，inline 样式也不会被清掉——整页会是一片空白。
+     这里一并兜住：面板始终 display:block，可见性只由 JSX 的 open 决定。 */
+  display: block !important;
+}
+
+.demo-detail-page .demo-drawer-host .ant-drawer .ant-drawer-section {
+  height: auto;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  /* 后台抽屉是 portal 到 body 的，落在 `theme.ts` 那个 lineHeight 令牌（22/14）的作用域之外，
+     正文行高算出来是 normal；演示页的面板留在 .ant-app 里，会继承到 22px。
+     要跟抽屉逐像素一致，这里把行高改回抽屉实际拿到的 normal。 */
+  line-height: normal;
+}
+
+/* 抽屉正文用 flex:1 撑满画布高度，这里要按内容撑开，改回内容高度 */
+.demo-detail-page .demo-drawer-host .ant-drawer .ant-drawer-body {
+  flex: none;
+  overflow: visible;
+}
+
+.demo-drawer-closed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 24px;
+}
+
+.demo-detail-intro h1 {
+  margin: 0 0 8px;
+  color: #303338;
+  font-size: 20px;
+}
+
+.demo-detail-intro p {
+  margin: 0;
+  color: #6a737d;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.demo-detail-meta {
+  margin-top: 8px;
+  color: #8f9499;
+  font-size: 12px;
+}

@@ -14,6 +14,7 @@ import MemberManagementPage from './features/premium-settlement/pages/MemberMana
 import PromotionManagementPage from './features/premium-settlement/pages/PromotionManagementPage';
 import SettlementPage from './features/premium-settlement/pages/SettlementPage';
 import BillDetailPage from './features/premium-settlement/pages/BillDetailPage';
+import FundingScenarioPage from './features/premium-settlement/pages/FundingScenarioPage';
 import OrderListPage from './features/premium-settlement/pages/OrderListPage';
 import SettlementApprovalPage from './features/premium-settlement/pages/SettlementApprovalPage';
 
@@ -55,6 +56,19 @@ export default function App() {
   const selectedKey = NAV_ITEMS.find((item) =>
     location.pathname.startsWith(item.key),
   )?.key;
+
+  // /demo/ 下的独立演示页不套后台外壳：导出成单文件 HTML 后打开即是那一页详情
+  if (location.pathname.startsWith('/demo/')) {
+    return (
+      <ShareProvider>
+        <Routes>
+          <Route path="/demo/funding/split" element={<FundingScenarioPage scenario="split" />} />
+          <Route path="/demo/funding/reversal" element={<FundingScenarioPage scenario="reversal" />} />
+          <Route path="*" element={<Navigate to="/demo/funding/reversal" replace />} />
+        </Routes>
+      </ShareProvider>
+    );
+  }
 
   return (
     <ShareProvider>

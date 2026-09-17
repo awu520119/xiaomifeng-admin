@@ -7,29 +7,32 @@ export const PASSWORD_POLICY = '8-20 位，需包含字母和数字';
 export const RESET_PASSWORD = 'Aa123456';
 export const DEFAULT_PERIOD = '2026-05';        // 结算当前账期
 
-export const PLATFORM_LAKALA_ACCOUNT_ID = 'lkl_platform_mch_001';
-export const PLATFORM_LAKALA_RECEIVER_ACCOUNT_ID = 'lkl_platform_recv_001';
-export const LKL_MERCHANT_COLLECT_ID = 'lkl_merchant_collect_001';
-export const LKL_MERCHANT_RECV_ID = 'lkl_merchant_recv_001';
-export const LKL_CHANNEL_RECV_ID = 'lkl_channel_recv_001';
+export const PLATFORM_HUIFU_ACCOUNT_ID = 'hf_platform_mch_001';
+export const PLATFORM_HUIFU_RECEIVER_ACCOUNT_ID = 'hf_platform_recv_001';
+export const HF_MERCHANT_COLLECT_ID = 'hf_merchant_collect_001';
+export const HF_MERCHANT_RECV_ID = 'hf_merchant_recv_001';
+export const HF_CHANNEL_RECV_ID = 'hf_channel_recv_001';
 
 export const OFFLINE_SETTLEMENT_FEE_RATE = 0.3;
+
+/** 重试分账后模拟渠道返回成功的延迟（store 流转状态、页面弹提示共用同一值） */
+export const FUNDING_RETRY_SETTLE_MS = 1200;
 
 export const SCENIC_OPTIONS: string[] = ['小蜜蜂自营空间', '云栖山景区', '西湖景区', '模拟景区', '山顶观景台', '湖滨亲子乐园'];
 export const SHOOT_POINT_OPTIONS: string[] = ['云栖山游客中心', '云栖山北门', '云栖山观景台', '云栖山南门', '山顶观景台', '湖滨亲子乐园'];
 
 export const SHOOT_POINT_COLLECTION_MCHID_MAP: Record<string, string[]> = {
-  [PLATFORM_LAKALA_ACCOUNT_ID]: ['云栖山游客中心', '云栖山北门', '云栖山观景台', '云栖山南门'],
-  [LKL_MERCHANT_COLLECT_ID]: ['山顶观景台', '湖滨亲子乐园']
+  [PLATFORM_HUIFU_ACCOUNT_ID]: ['云栖山游客中心', '云栖山北门', '云栖山观景台', '云栖山南门'],
+  [HF_MERCHANT_COLLECT_ID]: ['山顶观景台', '湖滨亲子乐园']
 };
 export const MCHID_NAME_MAP: Record<string, string> = {
-  [PLATFORM_LAKALA_ACCOUNT_ID]: '拉卡拉自营收款商户',
-  [PLATFORM_LAKALA_RECEIVER_ACCOUNT_ID]: '自营分账接收方',
-  [LKL_MERCHANT_RECV_ID]: '商家分账接收方',
-  [LKL_CHANNEL_RECV_ID]: '渠道分账接收方',
-  [LKL_MERCHANT_COLLECT_ID]: '景区商家收款商户',
-  lkl_promotion_recv_001: '钱塘推广分账接收方',
-  lkl_suspended_recv_001: '暂停分账演示商户'
+  [PLATFORM_HUIFU_ACCOUNT_ID]: '汇付自营收款商户',
+  [PLATFORM_HUIFU_RECEIVER_ACCOUNT_ID]: '自营分账接收方',
+  [HF_MERCHANT_RECV_ID]: '商家分账接收方',
+  [HF_CHANNEL_RECV_ID]: '渠道分账接收方',
+  [HF_MERCHANT_COLLECT_ID]: '景区商家收款商户',
+  hf_promotion_recv_001: '钱塘推广分账接收方',
+  hf_suspended_recv_001: '暂停分账演示商户'
 };
 
 export const CUSTOM_CHANNEL_TYPE = '自定义合作方';

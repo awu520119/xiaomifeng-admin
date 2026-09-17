@@ -28,13 +28,13 @@ import {
   COLLECTION_MODE_OPTIONS,
   CUSTOM_CHANNEL_PLACEHOLDER,
   CUSTOM_CHANNEL_TYPE,
-  LKL_CHANNEL_RECV_ID,
-  LKL_MERCHANT_COLLECT_ID,
-  LKL_MERCHANT_RECV_ID,
+  HF_CHANNEL_RECV_ID,
+  HF_MERCHANT_COLLECT_ID,
+  HF_MERCHANT_RECV_ID,
   MCHID_NAME_MAP,
   PASSWORD_POLICY,
-  PLATFORM_LAKALA_ACCOUNT_ID,
-  PLATFORM_LAKALA_RECEIVER_ACCOUNT_ID,
+  PLATFORM_HUIFU_ACCOUNT_ID,
+  PLATFORM_HUIFU_RECEIVER_ACCOUNT_ID,
   RESET_PASSWORD,
   SETTLEMENT_CYCLE_OPTIONS,
   SHOOT_POINT_COLLECTION_MCHID_MAP,
@@ -149,7 +149,7 @@ function MchidInput(props: {
     const name = MCHID_NAME_MAP[mchid];
     setResult({
       name: name || '未查询到',
-      eligibility: name ? (mchid === 'lkl_suspended_recv_001' ? 'ineligible' : 'eligible') : 'unsynced',
+      eligibility: name ? (mchid === 'hf_suspended_recv_001' ? 'ineligible' : 'eligible') : 'unsynced',
     });
   };
   const eligibilityText = result?.eligibility === 'eligible' ? '可分账' : result?.eligibility === 'ineligible' ? '不可分账' : '未同步';
@@ -196,7 +196,7 @@ function HuifuLookup(props: {
       props.onResult('未查询到', 'unsynced');
       return;
     }
-    props.onResult(merchantName, props.value.trim() === 'lkl_suspended_recv_001' ? 'ineligible' : 'eligible');
+    props.onResult(merchantName, props.value.trim() === 'hf_suspended_recv_001' ? 'ineligible' : 'eligible');
   };
   return (
     <div className="mchid-lookup">
@@ -749,7 +749,7 @@ function MerchantConfigEditor(props: {
   };
 
   // 运营拍摄点由账号的「收款商户号」自动带出：无需新增/选择/删除，账号下有哪些点即回显哪些点
-  const operatingMch = platform ? PLATFORM_LAKALA_ACCOUNT_ID : cfg.merchantMch || LKL_MERCHANT_COLLECT_ID;
+  const operatingMch = platform ? PLATFORM_HUIFU_ACCOUNT_ID : cfg.merchantMch || HF_MERCHANT_COLLECT_ID;
   const operatingPoints = SHOOT_POINT_COLLECTION_MCHID_MAP[operatingMch] || [];
 
   const makeDefaultRule = (point: string): PointShareRule => {
@@ -809,7 +809,7 @@ function MerchantConfigEditor(props: {
         error={props.formSubmitted && !platform && !cfg.merchantMch.trim() ? '请输入景区商家收款商户号' : undefined}
       >
         {platform ? (
-          <MchidReadonly mchid={PLATFORM_LAKALA_ACCOUNT_ID} />
+          <MchidReadonly mchid={PLATFORM_HUIFU_ACCOUNT_ID} />
         ) : (
           <MchidInput
             value={cfg.merchantMch}
@@ -874,7 +874,7 @@ function MerchantConfigEditor(props: {
               onResult={(receiverMchName, splitEligibility) => patch({ receiverMchName, splitEligibility })}
             />
           ) : (
-            <MchidReadonly mchid={PLATFORM_LAKALA_RECEIVER_ACCOUNT_ID} />
+            <MchidReadonly mchid={PLATFORM_HUIFU_RECEIVER_ACCOUNT_ID} />
           )}
         </Field>
       ) : null}

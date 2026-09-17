@@ -26,11 +26,11 @@ import type {
 import {
   CHANNEL_TYPE_OPTIONS,
   CUSTOM_CHANNEL_TYPE,
-  LKL_CHANNEL_RECV_ID,
-  LKL_MERCHANT_COLLECT_ID,
-  LKL_MERCHANT_RECV_ID,
-  PLATFORM_LAKALA_ACCOUNT_ID,
-  PLATFORM_LAKALA_RECEIVER_ACCOUNT_ID,
+  HF_CHANNEL_RECV_ID,
+  HF_MERCHANT_COLLECT_ID,
+  HF_MERCHANT_RECV_ID,
+  PLATFORM_HUIFU_ACCOUNT_ID,
+  PLATFORM_HUIFU_RECEIVER_ACCOUNT_ID,
   SCENIC_OPTIONS,
   SHOOT_POINT_OPTIONS,
   SHOOT_POINT_COLLECTION_MCHID_MAP,
@@ -144,11 +144,11 @@ export function defaultMerchantConfig(scenicName = TENANT_BRAND.name): MerchantC
     baseShareRatio: 100,
     retentionRatio: 0,
     pointShareConfigs: [],
-    merchantMch: LKL_MERCHANT_COLLECT_ID,
-    receiverMchid: LKL_MERCHANT_RECV_ID,
+    merchantMch: HF_MERCHANT_COLLECT_ID,
+    receiverMchid: HF_MERCHANT_RECV_ID,
     receiverMchName: '',
     splitEligibility: 'unsynced',
-    platformReceiverMchid: PLATFORM_LAKALA_RECEIVER_ACCOUNT_ID,
+    platformReceiverMchid: PLATFORM_HUIFU_RECEIVER_ACCOUNT_ID,
     settlementCycle: 'monthly',
     bankOwner: '',
     bankName: '',
@@ -164,7 +164,7 @@ export function defaultChannelConfig(): ChannelConfig {
     customChannelType: '',
     channelFundingPayer: 'platform',
     splitMode: 'system',
-    receiverMchid: LKL_CHANNEL_RECV_ID,
+    receiverMchid: HF_CHANNEL_RECV_ID,
     receiverMchName: '',
     splitEligibility: 'unsynced',
     settlementCycle: 'monthly',
@@ -990,7 +990,7 @@ export function validatePromotion(
 // D6. 订单生成
 // ============================================================
 
-interface OrderSeed extends Record<string, unknown> {
+export interface OrderSeed extends Record<string, unknown> {
   id: string;
   orderNo?: string;
   status: string;
@@ -1355,7 +1355,7 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
       account: snapshot.channelAccount || (channel ? channel.account : ''),
       name: snapshot.channelName,
       role: snapshot.participantType === 'promotion' ? '推广方' : '渠道',
-      target: channel && channel.config && channel.config.type === 'channel' ? channel.config.receiverMchid : LKL_CHANNEL_RECV_ID,
+      target: channel && channel.config && channel.config.type === 'channel' ? channel.config.receiverMchid : HF_CHANNEL_RECV_ID,
       relationType: snapshot.participantType === 'promotion' ? '推广方' : '渠道',
       ratio: snapshot.rate,
       amount: snapshot.shareAmount,
@@ -1370,7 +1370,7 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
       account: merchant ? merchant.account : '',
       name: merchant ? merchant.name : '景区商家',
       role: '商户',
-      target: config.receiverMchid || LKL_MERCHANT_RECV_ID,
+      target: config.receiverMchid || HF_MERCHANT_RECV_ID,
       relationType: '商户',
       ratio: merchantRatioDisplay,
       amount: merchantAmount,
@@ -1382,7 +1382,7 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
       account: 'platform',
       name: '自营方',
       role: '自营',
-      target: PLATFORM_LAKALA_RECEIVER_ACCOUNT_ID,
+      target: PLATFORM_HUIFU_RECEIVER_ACCOUNT_ID,
       relationType: '自营',
       ratio: platformRatioDisplay,
       amount: platformAmount,
@@ -1409,7 +1409,7 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
   const built = {
     ...seed,
     orderNo: seed.orderNo || formatOrderNo(seed.createdAt),
-    paymentWay: '拉卡拉支付',
+    paymentWay: '汇付支付',
     transactionId: `66${String(seed.id).slice(-16)}`,
     payer: collectionMode === 'merchant' ? (merchant ? merchant.name : '景区商家') : '自营',
     receiverSummary: splitModeText(fundingMode),
@@ -1420,11 +1420,11 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
     fundingResult,
     splitSkipReason,
     fundingFailReason: seed.fundingFailReason || '',
-    splitNo: isOrderSplit && ['已分账', '分账失败'].includes(splitStatus || '') ? `LKLSPLIT${String(seed.id).slice(-10)}` : '',
-    reversalNo: isOrderSplit && reversalStatus ? `LKLREV${String(seed.id).slice(-10)}` : '',
+    splitNo: isOrderSplit && ['已分账', '分账失败'].includes(splitStatus || '') ? `HFSPLIT${String(seed.id).slice(-10)}` : '',
+    reversalNo: isOrderSplit && reversalStatus ? `HFREV${String(seed.id).slice(-10)}` : '',
     splitAmount,
-    provider: 'lakala',
-    payerMchid: collectionMode === 'merchant' ? (config.merchantMch || LKL_MERCHANT_COLLECT_ID) : PLATFORM_LAKALA_ACCOUNT_ID,
+    provider: 'huifu',
+    payerMchid: collectionMode === 'merchant' ? (config.merchantMch || HF_MERCHANT_COLLECT_ID) : PLATFORM_HUIFU_ACCOUNT_ID,
     ruleVersion: seed.ruleVersion || 'rv_20260601',
     splitRelationStatus: isAutoSplit ? '已绑定' : '不适用',
     paidAmount,
@@ -1461,7 +1461,7 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
   return built as unknown as Order;
 }
 
-export function buildOrders(members: TenantMember[], promotions: PromotionPartner[]): Order[] {
+export function orderSeeds(members: TenantMember[], promotions: PromotionPartner[]): OrderSeed[] {
   const accounts = tenantBusinessAccounts(members, promotions);
   const merchant = accounts.find(item => item.objectType === 'merchant') || accounts[0] || null;
   const channels = accounts.filter(item => item.objectType === 'channel');
@@ -1475,7 +1475,7 @@ export function buildOrders(members: TenantMember[], promotions: PromotionPartne
     const channel = channels.find(item => item.id === id);
     return channel ? channel.name : '';
   }).filter(Boolean).join('、');
-  const seeds: OrderSeed[] = [
+  return [
     { id: '2026052010051700001', status: '已完成', orderType: '主题订单', theme: '云栖山日落旅拍', point: '云栖山游客中心', user: '周女士', phone: '138****2401', amount: 299, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelAccountIds: multiChannelIds, channelName: multiChannelName || channelName, createdAt: '2026-05-20 10:05:17', completedAt: '2026-05-20 10:16:19' },
     { id: '2026052011253200002', status: '待使用', orderType: '主题订单', theme: '云栖山亲子旅拍', point: '云栖山北门', user: '林先生', phone: '139****8821', amount: 399, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '待分账', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-05-20 11:25:32', completedAt: '' },
     { id: '2026052110182200007', status: '已完成', orderType: '主题订单', theme: '云栖山晨雾旅拍', point: '云栖山观景台', user: '何女士', phone: '131****6809', amount: 269, collectionMode: 'platform', splitMode: 'system', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-05-21 10:18:22', completedAt: '2026-05-21 10:32:41' },
@@ -1490,7 +1490,7 @@ export function buildOrders(members: TenantMember[], promotions: PromotionPartne
     { id: '2026052317061900005', status: '已退款', orderType: '照片订单', theme: '云栖山快照', point: '云栖山南门', user: '许女士', phone: '135****7788', amount: 99, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '', reversalStatus: '', splitSkipReason: '分账前退款', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-05-23 17:06:19', completedAt: '2026-05-23 17:20:08' },
     { id: '2026052411051900014', status: '已完成', orderType: '主题订单', theme: '云栖山晨雾旅拍', point: '云栖山观景台', user: '李先生', phone: '136****4512', amount: 299, collectionMode: 'platform', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, splitStatus: '分账失败', fundingFailReason: '线上自动分账接收方状态异常', createdAt: '2026-05-24 11:05:19', completedAt: '2026-05-24 11:22:40' },
     { id: '2026052414111900016', status: '待使用', orderType: '主题订单', theme: '云栖山晨雾旅拍', point: '云栖山观景台', user: '周先生', phone: '135****4512', amount: 229, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '分账失败', fundingFailReason: '线上自动分账接收方状态异常', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, createdAt: '2026-05-24 14:11:19', completedAt: '' },
-    { id: '2026052413282700015', status: '已退款', orderType: '照片订单', theme: '云栖山家庭快照', point: '云栖山南门', user: '吴女士', phone: '137****7364', amount: 159, collectionMode: 'merchant', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, splitStatus: '已分账', reversalStatus: '回退失败', fundingFailReason: '拉卡拉回退金额校验失败', createdAt: '2026-05-24 13:28:27', completedAt: '2026-05-24 13:42:16' },
+    { id: '2026052413282700015', status: '退款失败', orderType: '照片订单', theme: '云栖山家庭快照', point: '云栖山南门', user: '吴女士', phone: '137****7364', amount: 159, collectionMode: 'merchant', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, splitStatus: '已分账', reversalStatus: '回退失败', fundingFailReason: '汇付回退金额校验失败', createdAt: '2026-05-24 13:28:27', completedAt: '2026-05-24 13:42:16' },
     { id: '2026052416023300006', status: '已取消', orderType: '主题订单', theme: '云栖山日落旅拍', point: '云栖山北门', user: '王先生', phone: '188****2910', amount: 299, collectionMode: 'platform', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-05-24 16:02:33', completedAt: '' },
     // —— 云栖山南门拍摄点（配置了拍摄点分成）不同客单的演示单 ——
     { id: '2026052510091200017', status: '已完成', orderType: '照片订单', theme: '云栖山南门快照', point: '云栖山南门', user: '范女士', phone: '137****3612', amount: 99, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-05-25 10:09:12', completedAt: '2026-05-25 10:21:47' },
@@ -1506,10 +1506,21 @@ export function buildOrders(members: TenantMember[], promotions: PromotionPartne
     { id: '2026091516304500026', status: '已完成', orderType: '套餐订单', theme: '夕舍酒店', point: '云栖山科创中心', user: '周女士', phone: '191****2821', amount: 299, rating: 4, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, createdAt: '2026-09-15 16:30:45', completedAt: '2026-09-15 16:58:30' },
     { id: '2026091811382700027', status: '退款中', orderType: '照片订单', theme: '云栖山高光照片', point: '云栖山观景台', user: '刘女士', phone: '137****2406', amount: 129, collectionMode: 'merchant', splitMode: 'system', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-09-18 11:38:27', completedAt: '' },
     { id: '2026092213081200028', status: '已退款', orderType: '照片订单', theme: '云栖山快照', point: '云栖山南门', user: '许女士', phone: '135****7788', amount: 99, paidAmount: 99, refundAmount: 99, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '', reversalStatus: '', splitSkipReason: '分账前退款', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-09-22 13:08:12', completedAt: '2026-09-22 13:22:10' },
-    { id: '2026092413282700030', status: '已退款', orderType: '照片订单', theme: '云栖山家庭快照', point: '云栖山南门', user: '吴女士', phone: '137****7364', amount: 159, paidAmount: 159, refundAmount: 159, collectionMode: 'merchant', fundingMode: 'order_split', splitStatus: '已分账', reversalStatus: '回退失败', fundingFailReason: '拉卡拉回退金额校验失败', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, createdAt: '2026-09-24 13:28:27', completedAt: '2026-09-24 13:42:16' },
+    { id: '2026092413282700030', status: '退款失败', orderType: '照片订单', theme: '云栖山家庭快照', point: '云栖山南门', user: '吴女士', phone: '137****7364', amount: 159, paidAmount: 159, collectionMode: 'merchant', fundingMode: 'order_split', splitStatus: '已分账', reversalStatus: '回退失败', fundingFailReason: '汇付回退金额校验失败', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, createdAt: '2026-09-24 13:28:27', completedAt: '2026-09-24 13:42:16' },
     { id: '2026100514203800029', status: '已完成', orderType: '套餐订单', theme: '湖畔亲子乐园主题', point: '湖滨亲子乐园', user: '郑先生', phone: '137****6612', amount: 329, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: channelId2, channelName: multiChannelName, createdAt: '2026-10-05 14:20:38', completedAt: '2026-10-05 14:48:06' }
   ];
+}
+
+/** 按 seed 构建订单：补丁打在 seed 上，createTenantOrder 会重算全部派生字段 */
+export function buildOrdersFromSeeds(seeds: OrderSeed[], members: TenantMember[], promotions: PromotionPartner[]): Order[] {
+  const accounts = tenantBusinessAccounts(members, promotions);
+  const merchant = accounts.find(item => item.objectType === 'merchant') || accounts[0] || null;
+  const channels = accounts.filter(item => item.objectType === 'channel');
   return seeds.map(seed => createTenantOrder(seed, merchant, channels, promotions));
+}
+
+export function buildOrders(members: TenantMember[], promotions: PromotionPartner[]): Order[] {
+  return buildOrdersFromSeeds(orderSeeds(members, promotions), members, promotions);
 }
 
 // ============================================================
@@ -1929,4 +1940,4 @@ export function splitRuleOrderCalculation(order: Order, share?: OrderSplitShare 
   return settlementOrderCalculation(order, share || null, detailFactor ?? 1).rule;
 }
 
-export { LKL_CHANNEL_RECV_ID as CHANNEL_RECV_MCHID };
+export { HF_CHANNEL_RECV_ID as CHANNEL_RECV_MCHID };
