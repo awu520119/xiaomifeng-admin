@@ -978,7 +978,7 @@ export function validatePromotion(
     const otherDraft = rules.filter((_, i) => i !== index);
     const context = promotionContextForPoint(rule.point, draft.id || '', promotions, merchantConfig, savedChannelRules, otherDraft);
     if (roundAmount(rule.rate) > context.state.remaining) {
-      errors.push(`${rule.point}：该点仅剩 ${context.state.remaining}% 可分配（含渠道/推广），当前填写 ${roundAmount(rule.rate)}%`);
+      errors.push(`${rule.point}：该点可分配 ${context.state.remaining}%（不含本行）`);
       return;
     }
     seenPoints.add(rule.point);
@@ -1148,7 +1148,8 @@ function buildPromotionSnapshotsForOrder(
     .filter(promotionParticipatesInShare)
     .map((partner): ChannelSnapshotLike | null => {
       const rule = (partner.rules || []).find(item => item.point === (options.shootPoint || ''));
-      if (!rule) return null;
+      // R12：未配置规则与配置比例为 0 的结算结果一致，均不产生分账接收方与结算行
+      if (!rule || !(Number(rule.rate) > 0)) return null;
       const partnerSplitMode = partner.splitMode || 'system';
       const partnerFundingMode: FundingMode = isSplitSettlementMode(partnerSplitMode) ? 'order_split' : 'offline_settlement';
       const rate = Number(rule.rate || 0);

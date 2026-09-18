@@ -4,14 +4,19 @@ import type { TableProps } from 'antd';
 import { useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import {
+  SHOOT_POINT_COLLECTION_MCHID_MAP,
   SHOOT_POINT_OPTIONS,
   SPLIT_MODE_OPTIONS,
   roundAmount,
   tagColor,
 } from '../mock/constants';
-import { promotionContextForPoint, roleSummaryText, validatePromotion } from '../mock/engine';
+import { INITIAL_ROLES } from '../mock/data';
+import { pointCapacityText, promotionContextForPoint, roleSummaryText, validatePromotion } from '../mock/engine';
 import { useShare } from '../mock/store';
-import type { PromotionPartner, PromotionRule } from '../mock/types';
+import type { ChannelRule, MerchantConfig, PromotionPartner, PromotionRule } from '../mock/types';
+
+/** 已归属某个景区商家账号的拍摄点集合：仅这些点可作为推广规则的配置对象 */
+const OWNED_SHOOT_POINTS = new Set(Object.values(SHOOT_POINT_COLLECTION_MCHID_MAP).flat());
 
 const { useApp } = App;
 interface RuleRow {
@@ -49,6 +54,69 @@ export default function PromotionManagementPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [rejectError, setRejectError] = useState('');
 
+  // 容量口径的唯一来源：列表、抽屉、审核与启用校验共用同一份商家侧配置与渠道规则
+  const merchantConfig = useMemo((): MerchantConfig | undefined => {
+    for (const m of members) {
+      if (m.accountConfig && m.accountConfig.type === 'merchant') return m.accountConfig;
+    }
+    return undefined;
+  }, [members]);
+
+  const savedChannelRules = useMemo(() => {
+    const list: ChannelRule[] = [];
+    members.forEach((m) => {
+      if (m.accountConfig && m.accountConfig.type === 'channel') {
+        (m.accountConfig.channelRules || []).forEach((r) => list.push(r));
+      }
+    });
+    return list;
+  }, [members]);
+
+  /** R17：推广方规则按 R10 开始占用容量时，任一点将超 100% 即为冲突 */
+  function hasCapacityConflict(partner: PromotionPartner): boolean {
+    return (partner.rules || []).some((rule) => {
+      if (!rule.point || !(Number(rule.rate) > 0)) return false;
+      const { state } = promotionContextForPoint(rule.point, partner.id, promotions, merchantConfig, savedChannelRules, []);
+      return roundAmount(rule.rate) > state.remaining;
+    });
+  }
+
+  function warnCapacityConflict(action: string) {
+    modal.warning({
+      title: `无法${action}`,
+      content: '该推广方规则将导致拍摄点合计超过 100%，请先调整后再操作。',
+      okText: '知道了',
+    });
+  }
+
+  /** R18：审核中或已禁用的推广方，其规则一旦计入占用就会导致某点超限 */
+  const overCapacityIds = useMemo(() => {
+    const ids = new Set<string>();
+    promotions.forEach((p) => {
+      const occupies = p.auditStatus === 'approved' && p.status !== 'disabled';
+      if (occupies) return;
+      const over = (p.rules || []).some((rule) => {
+        if (!rule.point || !(Number(rule.rate) > 0)) return false;
+        const { state } = promotionContextForPoint(rule.point, p.id, promotions, merchantConfig, savedChannelRules, []);
+        return roundAmount(rule.rate) > state.remaining;
+      });
+      if (over) ids.add(p.id);
+    });
+    return ids;
+  }, [promotions, merchantConfig, savedChannelRules]);
+
+  /** R13：当前登录账号的角色是否被勾选「推广方配置编辑权限」 */
+  const canTogglePromotion = useMemo(
+    () =>
+      members.some((member) =>
+        member.roleIds.some((roleId) => {
+          const role = INITIAL_ROLES.find((item) => item.id === roleId);
+          return Boolean(role && role.permissions.includes('promotion.config.edit'));
+        }),
+      ),
+    [members],
+  );
+
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
     return promotions.filter((p) => {
@@ -70,15 +138,15 @@ export default function PromotionManagementPage() {
       contact: '',
       phone: '',
       openingMethod: '后台创建',
-      auditStatus: 'approved',
-      status: 'enabled',
+      auditStatus: 'pending',
+      status: 'disabled',
       licenseName: '',
       bankOwner: '',
       bankName: '',
       bankAccount: '',
       bankBranch: '',
       splitMode: 'system',
-      integrationStatus: 'integrated',
+      integrationStatus: 'pending',
       receiverMchid: '',
       receiverMchName: '',
       splitEligibility: 'unsynced',
@@ -126,9 +194,13 @@ export default function PromotionManagementPage() {
     setDrawerOpen(true);
   }
 
-  /** 审核通过：状态置为已通过并启用 */
+  /** 审核通过：状态置为已通过并启用；规则恢复占用容量导致超限时阻断本次变更 */
   function handleApprove() {
     if (!editing) return;
+    if (hasCapacityConflict(editing)) {
+      warnCapacityConflict('审核通过');
+      return;
+    }
     const next: PromotionPartner = {
       ...editing,
       splitMode: 'system',
@@ -191,14 +263,22 @@ export default function PromotionManagementPage() {
 
   function handleToggle(p: PromotionPartner) {
     if (p.auditStatus !== 'approved') return;
+    const enabling = p.status !== 'enabled';
+    // 恢复启用会重新占用拍摄点容量，可能把该点顶超限：阻断本次启用
+    if (enabling) {
+      if (hasCapacityConflict(p)) {
+        warnCapacityConflict('启用');
+        return;
+      }
+    }
     togglePromotion(p.id);
-    message.success(p.status === 'enabled' ? '推广方已禁用' : '推广方已启用');
+    message.success(enabling ? '推广方已启用' : '推广方已禁用');
   }
 
-  // 新建/编辑保存即通过（内部渠道创建）；已驳回方修改保存后回到“待审核”重新走审核流程
+  // 新建与已驳回方修改保存后统一回到“审核中”，由审核通过再置为生效
   const isNew = !editing;
   const wasRejected = Boolean(editing && editing.auditStatus === 'rejected');
-  const effectiveAuditStatus = 'approved';
+  const toPending = isNew || wasRejected;
 
   function updateRow(index: number, patch: Partial<RuleRow>) {
     setErrorText('');
@@ -253,16 +333,16 @@ export default function PromotionManagementPage() {
       contact: draft.contact.trim(),
       phone: draft.phone.trim(),
       openingMethod: editing ? editing.openingMethod : '后台创建',
-      auditStatus: wasRejected ? 'pending' : effectiveAuditStatus,
-      // 已驳回方修改后回到待审核并停用，等待重新审核；已是“通过”的沿用原状态（可停用）
-      status: wasRejected ? 'disabled' : editing && editing.auditStatus === 'approved' ? editing.status : 'enabled',
+      // 新建与已驳回方修改后进入审核中并停用；已通过方编辑时沿用原审核状态与原启用状态
+      auditStatus: toPending ? 'pending' : editing ? editing.auditStatus : 'pending',
+      status: toPending ? 'disabled' : editing ? editing.status : 'disabled',
       licenseName: draft.licenseName.trim(),
       bankOwner: draft.bankOwner.trim(),
       bankName: draft.bankName.trim(),
       bankAccount: draft.bankAccount.trim(),
       bankBranch: draft.bankBranch.trim(),
       splitMode: 'system',
-      integrationStatus: wasRejected ? 'pending' : 'integrated',
+      integrationStatus: toPending ? 'pending' : 'integrated',
       receiverMchid: '',
       receiverMchName: '',
       splitEligibility: 'unsynced',
@@ -275,16 +355,20 @@ export default function PromotionManagementPage() {
     const finishSave = () => {
       savePromotion(next);
       setDrawerOpen(false);
-      message.success(wasRejected ? '修改已保存，推广方已重新提交审核' : isNew ? '推广方已创建' : '推广方已更新');
+      message.success(
+        isNew ? '推广方已创建，等待审核' : wasRejected ? '修改已保存，推广方已重新提交审核' : '推广方已更新',
+      );
     };
     finishSave();
   }
 
   const renderSwitch = (p: PromotionPartner) => {
+    // R13：启用 / 停用受「推广方配置编辑权限」控制，未勾选该权限的角色不展示入口
+    if (!canTogglePromotion) return null;
     const disabled = p.auditStatus !== 'approved';
     const isOn = p.status === 'enabled';
     const disableTitle =
-      p.auditStatus === 'pending' ? '待审核，审核通过后启用' : p.auditStatus === 'rejected' ? '已驳回，需重新提交' : '未通过审核，不可启用';
+      p.auditStatus === 'pending' ? '审核中，审核通过后启用' : p.auditStatus === 'rejected' ? '已驳回，需重新提交' : '未通过审核，不可启用';
     return (
       <span title={disabled ? disableTitle : undefined}>
         <Switch
@@ -312,8 +396,17 @@ export default function PromotionManagementPage() {
     {
       title: '推广方名称',
       key: 'name',
-      width: 220,
-      render: (_: unknown, p: PromotionPartner) => <span className="cell-title">{p.name}</span>,
+      width: 260,
+      render: (_: unknown, p: PromotionPartner) => (
+        <Space size={6}>
+          <span className="cell-title">{p.name}</span>
+          {overCapacityIds.has(p.id) ? (
+            <Tag color="error" title="该推广方规则一旦生效将导致拍摄点分成合计超过 100%">
+              容量超限
+            </Tag>
+          ) : null}
+        </Space>
+      ),
     },
     {
       title: '联系人',
@@ -342,7 +435,7 @@ export default function PromotionManagementPage() {
       key: 'auditStatus',
       width: 100,
       render: (_: unknown, p: PromotionPartner) => {
-        const text = p.auditStatus === 'approved' ? '已通过' : p.auditStatus === 'rejected' ? '已驳回' : '待审核';
+        const text = p.auditStatus === 'approved' ? '已通过' : p.auditStatus === 'rejected' ? '已驳回' : '审核中';
         return (
           <Tag color={tagColor(p.auditStatus)} title={p.auditStatus === 'rejected' && p.rejectReason ? p.rejectReason : undefined}>
             {text}
@@ -429,7 +522,7 @@ export default function PromotionManagementPage() {
             onChange={setAuditFilter}
             items={[
               { key: 'all', label: '全部' },
-              { key: 'pending', label: '待审核' },
+              { key: 'pending', label: '审核中' },
               { key: 'approved', label: '已通过' },
               { key: 'rejected', label: '已驳回' },
             ]}
@@ -491,7 +584,8 @@ export default function PromotionManagementPage() {
           removeRuleRow={removeRuleRow}
           errorText={errorText}
           formSubmitted={formSubmitted}
-          members={members}
+          merchantConfig={merchantConfig}
+          savedChannelRules={savedChannelRules}
           promotions={promotions}
           editingId={editing ? editing.id : ''}
           readOnly={mode === 'audit'}
@@ -540,7 +634,8 @@ function PromotionForm(props: {
   removeRuleRow: (index: number) => void;
   errorText: string;
   formSubmitted: boolean;
-  members: import('../mock/types').TenantMember[];
+  merchantConfig: MerchantConfig | undefined;
+  savedChannelRules: ChannelRule[];
   promotions: PromotionPartner[];
   editingId: string;
   readOnly?: boolean;
@@ -549,22 +644,7 @@ function PromotionForm(props: {
   const readOnly = Boolean(props.readOnly);
   const [licenseError, setLicenseError] = useState('');
   const patch = (p: Partial<PromotionPartner>) => props.setDraft({ ...draft, ...p });
-  const merchantConfig = useMemo(() => {
-    for (const m of props.members) {
-      if (m.accountConfig && m.accountConfig.type === 'merchant') return m.accountConfig;
-    }
-    return undefined;
-  }, [props.members]);
-
-  const savedChannelRules = useMemo(() => {
-    const list: import('../mock/types').ChannelRule[] = [];
-    props.members.forEach((m) => {
-      if (m.accountConfig && m.accountConfig.type === 'channel') {
-        (m.accountConfig.channelRules || []).forEach((r) => list.push(r));
-      }
-    });
-    return list;
-  }, [props.members]);
+  const { merchantConfig, savedChannelRules } = props;
 
   // 每行实时上下文：本行草稿比例 + 已生效渠道/推广；据此展示「该点剩余可分」或超限红字
   const rowCtx = useMemo(
@@ -582,24 +662,27 @@ function PromotionForm(props: {
         return {
           remaining: ctx.state.remaining,
           over: ctx.state.over > 0,
-          total: ctx.state.total,
-          overText: ctx.state.over > 0 ? `该点分成合计 ${roundAmount(ctx.state.total)}%，已超 100%（超 ${roundAmount(ctx.state.over)}%）` : '',
+          // 超限文案统一取 engine 的共享文案，避免与渠道侧两处维护
+          overText: pointCapacityText(ctx.state),
         };
       }),
     [rows, props.editingId, props.promotions, merchantConfig, savedChannelRules],
   );
 
+  // 比例越界与容量不足的文案统一由 engine 产出（R16），此处只兜底未选择拍摄点这种无拍摄点前缀、无法落到行上的情况
   const ruleFieldError = (row: RuleRow, field: 'point' | 'rate') => {
     if (!props.formSubmitted || !row) return undefined;
     if (field === 'point' && !row.point) return '请选择拍摄点';
-    if (field === 'rate' && row.point && (!Number.isFinite(row.rate) || row.rate < 0 || row.rate > 100)) return '分成比例须大于等于 0 且不超过 100%';
     return undefined;
   };
 
   const savedRuleErrors = (index: number, row: RuleRow) => {
     const errors = props.errorText ? props.errorText.split('；').filter(Boolean) : [];
-    return errors.filter((error) =>
-      error.includes(`第 ${index + 1} 行`) || (Boolean(row.point) && error.includes(`拍摄点「${row.point}」`)),
+    return errors.filter(
+      (error) =>
+        error.includes(`第 ${index + 1} 行`)
+        // 重复配置文案为「拍摄点「X」…」，容量不足文案为「X：该点可分配…」，两种都需落到对应行
+        || (Boolean(row.point) && (error.includes(`拍摄点「${row.point}」`) || error.startsWith(`${row.point}：`))),
     );
   };
 
@@ -714,22 +797,30 @@ function PromotionForm(props: {
                           placeholder="请选择拍摄点"
                           style={{ width: '100%' }}
                           value={row.point || undefined}
-                          options={SHOOT_POINT_OPTIONS.map((p) => ({ value: p, label: p, disabled: otherPoints.includes(p) }))}
+                          options={SHOOT_POINT_OPTIONS.map((p) => ({
+                            value: p,
+                            label: p,
+                            // 无所属景区商家账号的拍摄点不可作为推广规则的配置对象
+                            disabled: otherPoints.includes(p) || !OWNED_SHOOT_POINTS.has(p),
+                          }))}
                           disabled={readOnly}
                           onChange={(v) => props.updateRow(index, { point: v })}
                         />
                       </Field>
                       <Field label="分成比例(%)" required error={rateError || ruleFieldError(row, 'rate')}>
                         <InputNumber
-                          min={0}
-                          max={100}
                           step={1}
                           precision={0}
                           style={{ width: '100%' }}
                           addonAfter="%"
                           disabled={readOnly}
                           value={row.rate}
-                          onChange={(v) => props.updateRow(index, { rate: v == null ? 0 : Math.round(Number(v)) })}
+                          // R14：越界值不做自动收敛，保持用户输入，保存时统一校验并阻断
+                          onChange={(v) =>
+                            props.updateRow(index, {
+                              rate: v == null || !Number.isFinite(Number(v)) ? 0 : Math.round(Number(v)),
+                            })
+                          }
                         />
                       </Field>
                       {!readOnly ? (

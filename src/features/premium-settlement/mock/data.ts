@@ -2,7 +2,7 @@
 import type { InvoiceFile, PromotionPartner, TenantMember, TenantRole } from './types';
 
 export const INITIAL_ROLES: TenantRole[] = [
-  { id: 'tr_admin', name: '租户管理员', type: 'system', desc: '租户核心管理', memberCount: 1, status: 'enabled', createdAt: '2026-06-12 14:30', updatedAt: '2026-07-01 10:00', permissions: ['tenant.admin.default', 'settlement.bill.view.all', 'settlement.split.retry'] },
+  { id: 'tr_admin', name: '租户管理员', type: 'system', desc: '租户核心管理', memberCount: 1, status: 'enabled', createdAt: '2026-06-12 14:30', updatedAt: '2026-07-01 10:00', permissions: ['tenant.admin.default', 'settlement.bill.view.all', 'settlement.split.retry', 'promotion.config.edit'] },
   { id: 'tr_scenic_ops', name: '景区商家', type: 'system', desc: '景区商家', memberCount: 1, status: 'enabled', createdAt: '2026-06-12 14:35', updatedAt: '2026-07-01 10:10', permissions: ['order.view', 'order.refund', 'settlement.period.manage', 'settlement.bill.view.own'] },
   { id: 'tr_channel', name: '渠道', type: 'system', desc: '渠道分销与佣金结算', memberCount: 2, status: 'enabled', createdAt: '2026-06-12 14:40', updatedAt: '2026-07-01 10:15', permissions: ['order.view', 'settlement.period.manage', 'settlement.bill.view.own'] },
   { id: 'tr_promotion', name: '推广方', type: 'system', desc: '推广方分成与账期查看', memberCount: 2, status: 'enabled', createdAt: '2026-06-12 14:42', updatedAt: '2026-07-01 10:16', permissions: ['order.view', 'settlement.bill.view.own'] },
@@ -32,8 +32,10 @@ export const INITIAL_MEMBERS: TenantMember[] = [
       baseShareRatio: 100,
       retentionRatio: 0,
       pointShareConfigs: [
-        { id: 'ps_nanmen_ratio', point: '云栖山南门', ratio: 45, counterpartyRatio: 45, premiumRatio: 0 },
-        { id: 'ps_beimen_ratio', point: '云栖山北门', ratio: 55, counterpartyRatio: 37, premiumRatio: 0 }
+        { id: 'ps_nanmen_ratio', point: '云栖山南门', ratio: 45, counterpartyRatio: 30, premiumRatio: 0 },
+        { id: 'ps_beimen_ratio', point: '云栖山北门', ratio: 55, counterpartyRatio: 25, premiumRatio: 0 },
+        { id: 'ps_center_ratio', point: '云栖山游客中心', ratio: 60, counterpartyRatio: 28, premiumRatio: 0 },
+        { id: 'ps_view_ratio', point: '云栖山观景台', ratio: 60, counterpartyRatio: 25, premiumRatio: 0 }
       ],
       merchantMch: 'hf_merchant_collect_001',
       receiverMchid: 'hf_merchant_recv_001',
