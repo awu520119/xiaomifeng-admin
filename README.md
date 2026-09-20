@@ -41,4 +41,7 @@ npm install
 npm run dev
 npm run check
 npm run build
+npm run review:all
 ```
+
+`npm run review:all` 会在 `dist/` 下生成按评审场景拆分的独立静态 HTML；`npm run share` 仍只生成完整项目单页。

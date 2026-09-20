@@ -19,7 +19,7 @@ import type { ChannelRule, MerchantConfig, PromotionPartner, PromotionRule } fro
 const OWNED_SHOOT_POINTS = new Set(Object.values(SHOOT_POINT_COLLECTION_MCHID_MAP).flat());
 
 const { useApp } = App;
-interface RuleRow {
+export interface RuleRow {
   id: string;
   point: string;
   rate: number;
@@ -54,7 +54,7 @@ export default function PromotionManagementPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [rejectError, setRejectError] = useState('');
 
-  // 容量口径的唯一来源：列表、抽屉、审核与启用校验共用同一份商家侧配置与渠道规则
+  // 抽屉分成规则编辑使用的商家侧配置与渠道规则
   const merchantConfig = useMemo((): MerchantConfig | undefined => {
     for (const m of members) {
       if (m.accountConfig && m.accountConfig.type === 'merchant') return m.accountConfig;
@@ -71,39 +71,6 @@ export default function PromotionManagementPage() {
     });
     return list;
   }, [members]);
-
-  /** R17：推广方规则按 R10 开始占用容量时，任一点将超 100% 即为冲突 */
-  function hasCapacityConflict(partner: PromotionPartner): boolean {
-    return (partner.rules || []).some((rule) => {
-      if (!rule.point || !(Number(rule.rate) > 0)) return false;
-      const { state } = promotionContextForPoint(rule.point, partner.id, promotions, merchantConfig, savedChannelRules, []);
-      return roundAmount(rule.rate) > state.remaining;
-    });
-  }
-
-  function warnCapacityConflict(action: string) {
-    modal.warning({
-      title: `无法${action}`,
-      content: '该推广方规则将导致拍摄点合计超过 100%，请先调整后再操作。',
-      okText: '知道了',
-    });
-  }
-
-  /** R18：审核中或已禁用的推广方，其规则一旦计入占用就会导致某点超限 */
-  const overCapacityIds = useMemo(() => {
-    const ids = new Set<string>();
-    promotions.forEach((p) => {
-      const occupies = p.auditStatus === 'approved' && p.status !== 'disabled';
-      if (occupies) return;
-      const over = (p.rules || []).some((rule) => {
-        if (!rule.point || !(Number(rule.rate) > 0)) return false;
-        const { state } = promotionContextForPoint(rule.point, p.id, promotions, merchantConfig, savedChannelRules, []);
-        return roundAmount(rule.rate) > state.remaining;
-      });
-      if (over) ids.add(p.id);
-    });
-    return ids;
-  }, [promotions, merchantConfig, savedChannelRules]);
 
   /** R13：当前登录账号的角色是否被勾选「推广方配置编辑权限」 */
   const canTogglePromotion = useMemo(
@@ -194,13 +161,9 @@ export default function PromotionManagementPage() {
     setDrawerOpen(true);
   }
 
-  /** 审核通过：状态置为已通过并启用；规则恢复占用容量导致超限时阻断本次变更 */
+  /** 审核通过：状态置为已通过并启用 */
   function handleApprove() {
     if (!editing) return;
-    if (hasCapacityConflict(editing)) {
-      warnCapacityConflict('审核通过');
-      return;
-    }
     const next: PromotionPartner = {
       ...editing,
       splitMode: 'system',
@@ -264,13 +227,6 @@ export default function PromotionManagementPage() {
   function handleToggle(p: PromotionPartner) {
     if (p.auditStatus !== 'approved') return;
     const enabling = p.status !== 'enabled';
-    // 恢复启用会重新占用拍摄点容量，可能把该点顶超限：阻断本次启用
-    if (enabling) {
-      if (hasCapacityConflict(p)) {
-        warnCapacityConflict('启用');
-        return;
-      }
-    }
     togglePromotion(p.id);
     message.success(enabling ? '推广方已启用' : '推广方已禁用');
   }
@@ -400,11 +356,6 @@ export default function PromotionManagementPage() {
       render: (_: unknown, p: PromotionPartner) => (
         <Space size={6}>
           <span className="cell-title">{p.name}</span>
-          {overCapacityIds.has(p.id) ? (
-            <Tag color="error" title="该推广方规则一旦生效将导致拍摄点分成合计超过 100%">
-              容量超限
-            </Tag>
-          ) : null}
         </Space>
       ),
     },
@@ -624,7 +575,7 @@ export default function PromotionManagementPage() {
 // ============================================================
 // 抽屉表单
 // ============================================================
-function PromotionForm(props: {
+export function PromotionForm(props: {
   draft: PromotionPartner;
   setDraft: (p: PromotionPartner) => void;
   rows: RuleRow[];

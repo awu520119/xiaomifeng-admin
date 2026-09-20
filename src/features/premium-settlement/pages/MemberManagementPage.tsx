@@ -81,7 +81,7 @@ function configWithCycleEffectiveAt(config: AccountConfig): AccountConfig {
   return config;
 }
 
-interface BaseMemberFields {
+export interface BaseMemberFields {
   account: string;
   password: string;
   name: string;
@@ -631,7 +631,7 @@ export default function MemberManagementPage() {
 }
 
 /** 抽屉表单主体（基础字段 + 分成配置面板） */
-function MemberForm(props: {
+export function MemberForm(props: {
   base: BaseMemberFields;
   setBase: Dispatch<SetStateAction<BaseMemberFields>>;
   editing: TenantMember | null;

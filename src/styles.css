@@ -1807,3 +1807,18 @@ select {
   color: #8f9499;
   font-size: 12px;
 }
+
+/* 评审页走后台路由时保留完整 Layout；不要继承脱离外壳演示页的窄版画布。 */
+.app-content > .demo-detail-page {
+  min-height: auto;
+  padding: 0;
+  background: transparent;
+}
+
+.app-content > .demo-detail-page > * {
+  max-width: none;
+}
+
+.app-content > .demo-detail-page .demo-drawer-host {
+  max-width: 800px;
+}

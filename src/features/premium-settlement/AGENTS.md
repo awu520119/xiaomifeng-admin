@@ -68,5 +68,5 @@
 - 审批明细使用 `/settlement/approval/bill/...` 二级路由，页面标题与返回入口均归属结算审批，不跳转结算中心导航。
 - 结算中心与结算审批主页签使用会话记忆，进入二级账期详情返回后恢复进入前的页签。
 - 分账/回退重试按渠道特性走到终态：回退走垫资、结果同步返回，确认后直接「已回退」并完成退款；重试分账先「待分账」，约 1.2 秒后「已分账」。重试改写订单 seed 而非成品订单，派生字段由 `createTenantOrder` 重算。
-- 订单详情正文抽到 `pages/OrderDetailSections.tsx`，订单管理抽屉与 `#/demo/funding/*` 两个独立演示页共用；独立演示页不套后台外壳，供 `npm run demo:order-detail` 导出单文件 HTML。
+- 订单详情正文抽到 `pages/OrderDetailSections.tsx`，订单管理抽屉与 `#/demo/funding/*` 两个路由演示共用；演示路由不套后台外壳，`npm run share` 统一导出包含全部项目路由的单文件 HTML。
 - 独立演示页复用真实 antd Drawer，靠 `src/styles.css` 末尾 `.demo-detail-page` 一段把面板摊平成文档流整页（`display:block !important` 是必需的：rc-motion 入场动画被停掉后不会清掉它自己挂的 inline `display:none`，少了这条整页空白）。改抽屉外观时注意别只改演示页或只改抽屉。

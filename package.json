@@ -8,7 +8,8 @@
     "check": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
     "share": "npm run build && node scripts/inline-share.mjs",
-    "demo:order-detail": "npm run build && node scripts/inline-share.mjs",
+    "review:members": "npm run build && node scripts/inline-share.mjs --review=members",
+    "review:all": "npm run build && node scripts/inline-share.mjs --review=all",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -26,4 +27,3 @@
     "vite": "^8.2.2"
   }
 }
-

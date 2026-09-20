@@ -1,4 +1,5 @@
 import { App, Button, Drawer } from 'antd';
+import { useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { moneyText } from '../mock/constants';
 import { useShare } from '../mock/store';
@@ -29,6 +30,8 @@ const SCENARIOS: Record<Scenario, { orderId: string; title: string; intro: strin
  */
 export default function FundingScenarioPage({ scenario }: { scenario: Scenario }) {
   const { orders } = useShare();
+  const location = useLocation();
+  const isReview = location.pathname.startsWith('/review/');
   const { message } = useApp();
   const config = SCENARIOS[scenario];
   const order = orders.find((item) => item.id === config.orderId);
@@ -40,11 +43,11 @@ export default function FundingScenarioPage({ scenario }: { scenario: Scenario }
 
   return (
     <div className="admin-page demo-detail-page">
-      <header className="demo-detail-intro">
+      {!isReview ? <header className="demo-detail-intro">
         <h1>{config.title}</h1>
         <p>{config.intro}</p>
         {order ? <div className="demo-detail-meta">订单号 {order.orderNo} · 支付金额 ￥{moneyText(order.paidAmount || order.amount)}</div> : null}
-      </header>
+      </header> : null}
 
       <div className="demo-drawer-host">
         {open ? (
@@ -56,8 +59,9 @@ export default function FundingScenarioPage({ scenario }: { scenario: Scenario }
             open
             // 面板首帧就在 DOM 里，不等 rc-drawer 的挂载副作用，导出后打开不会闪
             forceRender
-            getContainer={false}
-            mask={false}
+            getContainer={isReview ? undefined : false}
+            mask={isReview}
+            closable={isReview}
             onClose={() => setOpen(false)}
             footer={order ? <div className="order-drawer-footer"><Button type="primary" danger disabled={!canRefund} onClick={() => message.info('退款流程属订单售后模块，本演示仅保留入口')}>退款</Button></div> : null}
           >
