@@ -10,6 +10,7 @@
     "share": "npm run build && node scripts/inline-share.mjs",
     "review:members": "npm run build && node scripts/inline-share.mjs --review=members",
     "review:all": "npm run build && node scripts/inline-share.mjs --review=all",
+    "prd:all": "npm run build && node scripts/inline-share.mjs --prd=all",
     "preview": "vite preview"
   },
   "dependencies": {

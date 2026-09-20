@@ -42,6 +42,7 @@ npm run dev
 npm run check
 npm run build
 npm run review:all
+npm run prd:all
 ```
 
-`npm run review:all` 会在 `dist/` 下生成按评审场景拆分的独立静态 HTML；`npm run share` 仍只生成完整项目单页。
+`npm run review:all` 会在 `dist/` 下生成按评审场景拆分的独立静态 HTML；`npm run prd:all` 会按 `docs/premium-settlement/` 下的 PRD 文件名，逐篇生成同名独立静态 HTML（文件名与 PRD 一致，默认落地到该 PRD 描述的页面）；`npm run share` 仍只生成完整项目单页。

@@ -69,4 +69,5 @@
 - 结算中心与结算审批主页签使用会话记忆，进入二级账期详情返回后恢复进入前的页签。
 - 分账/回退重试按渠道特性走到终态：回退走垫资、结果同步返回，确认后直接「已回退」并完成退款；重试分账先「待分账」，约 1.2 秒后「已分账」。重试改写订单 seed 而非成品订单，派生字段由 `createTenantOrder` 重算。
 - 订单详情正文抽到 `pages/OrderDetailSections.tsx`，订单管理抽屉与 `#/demo/funding/*` 两个路由演示共用；演示路由不套后台外壳，`npm run share` 统一导出包含全部项目路由的单文件 HTML。
+- 导出有三个出口：`npm run share` 整站单文件、`npm run review:all` 按评审场景出 `review-*.html`、`npm run prd:all` 按 `docs/<模块>/` 下的 PRD 文件名逐篇出同名 HTML。新增 PRD 后需要在 `scripts/inline-share.mjs` 的 `prdPages` 里登记落地 hash，否则脚本会直接报错（`docs/` 下任何 `.md` 未登记即失败）。
 - 独立演示页复用真实 antd Drawer，靠 `src/styles.css` 末尾 `.demo-detail-page` 一段把面板摊平成文档流整页（`display:block !important` 是必需的：rc-motion 入场动画被停掉后不会清掉它自己挂的 inline `display:none`，少了这条整页空白）。改抽屉外观时注意别只改演示页或只改抽屉。

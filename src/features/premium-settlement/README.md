@@ -42,7 +42,8 @@
 - 新增结算审批页，按景区商家/渠道/推广方三类对象展示结算申请，仅保留审核中、打款中、已打款、已驳回状态；线上自动分账不进入审批列表，并支持明细跳转与审核/打款二次确认；仅自营管理员与财务角色可访问。
 - 重试按渠道特性走通到终态：回退走垫资、结果同步返回，确认后分账状态直接「已回退」、订单转「已退款」；重试分账先转「待分账」，约 1.2 秒后转「已分账」。重试改写的是订单 seed（`orderSeeds` + `buildOrdersFromSeeds`），由 `createTenantOrder` 重算退款金额、回退金额、已分账净额等派生字段。
 - 订单详情正文抽到 `pages/OrderDetailSections.tsx`，订单管理抽屉与两个独立演示页共用同一份实现。
-- 保留 `#/demo/funding/split`（分账失败，订单 `2026052414111900016`）与 `#/demo/funding/reversal`（回退失败，订单 `2026092413282700030`）两个不套后台外壳的路由演示；`npm run share` 统一导出包含全部项目路由的 `dist/xiaomifeng-share.html` 单文件，不再拆分导出多个 HTML。
+- 保留 `#/demo/funding/split`（分账失败，订单 `2026052414111900016`）与 `#/demo/funding/reversal`（回退失败，订单 `2026092413282700030`）两个不套后台外壳的路由演示；`npm run share` 统一导出包含全部项目路由的 `dist/xiaomifeng-share.html` 单文件。
+- `npm run prd:all` 按 `docs/premium-settlement/` 下的 PRD 文件名逐篇导出同名独立 HTML（`dist/<PRD 文件名>.html`），默认落地到该 PRD 描述的页面，供评审时文档与页面逐篇对照；映射表在 `scripts/inline-share.mjs` 的 `prdPages`，新增 PRD 未登记映射时脚本直接报错。
 - 两个独立演示页用**真实的 antd Drawer** 渲染详情，再由 `.demo-drawer-host` 下的样式把面板从浮层摊平成文档流里的整页面板，而不是另写一套外观。这样 header、分区、`Descriptions`、`Tag`、footer 与「订单管理」右侧抽屉逐像素同源，只有定位规则不同；面板宽度锁 800px（与抽屉一致），页面居中。
 - 结算中心「线上自动分账」页签去掉账期级分账状态列与状态筛选，改为「应分账金额」右侧的异常图标：账期内存在分账失败或回退失败订单时展示，悬浮展示两类笔数与「请查看明细」，点击进入该账期详情。笔数由 `engine.ts` 的 `billSplitAnomaly` 从订单的分账/回退状态派生（回退状态优先，与明细口径一致）。
 - 结算周期的默认值随分账方式：选「线上自动分账」默认周结（回款快、没有发票与审批成本），选「线下对公结算」默认月结（周结会让财务每周走一遍出账、申请、审核、打款）。新建对象时若周期仍是上一个方式的默认值（说明没主动改过）则跟随切换；**已保存过的对象不跟随**，改周期仍走「下一期生效」的既有流程，避免静默改写已配置的周期。落地在 `MemberManagementPage.tsx` 的 `defaultCycleForSplitMode` / `splitModeChange`，两个编辑器新增 `isNew` 入参。

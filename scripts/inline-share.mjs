@@ -1,5 +1,5 @@
 // 把 vite 构建产物（dist/）中的 JS/CSS 内联进 index.html，产出整站单文件、可离线双击分享的 HTML。
-// 用法：npm run build && node scripts/inline-share.mjs [--review=members]
+// 用法：npm run build && node scripts/inline-share.mjs [--review=members] [--prd=all]
 // 默认产出：dist/xiaomifeng-share.html
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -8,7 +8,11 @@ import { fileURLToPath } from 'node:url';
 const root = dirname(fileURLToPath(import.meta.url)) + '/..';
 const dist = join(root, 'dist');
 const assetDir = join(dist, 'assets');
-const review = process.argv.find((arg) => arg.startsWith('--review='))?.split('=')[1];
+const review = process.argv.find((arg) => arg.startsWith('--review='))?.slice('--review='.length);
+const prdArg = process.argv.find((arg) => arg.startsWith('--prd='));
+const prd = prdArg?.slice('--prd='.length);
+/** 注入默认路由的锚点：第一个 module script 之前 */
+const marker = '<script type="module">';
 
 if (!existsSync(join(dist, 'index.html'))) {
   console.error('未找到 dist/index.html，请先执行 npm run build');
@@ -73,7 +77,6 @@ if (review) {
     console.error(`不支持的评审页：${review}。可用值：all, ${Object.keys(reviewPages).join(', ')}`);
     process.exit(1);
   }
-  const marker = '<script type="module">';
   for (const target of targets) {
     const reviewHtml = html.replace(
       marker,
@@ -82,5 +85,67 @@ if (review) {
     const reviewFile = join(dist, target.file);
     writeFileSync(reviewFile, reviewHtml);
     console.log(`已生成评审页：${reviewFile}（${(reviewHtml.length / 1024 / 1024).toFixed(2)} MB）`);
+  }
+}
+
+// PRD 页：每篇 PRD 一个独立 HTML，文件名与 docs/premium-settlement/ 下的 PRD 完全同名（只换后缀）。
+// key 是 PRD 文件名，hash 是该 PRD 描述的页面；映射全部沿用 reviewPages 里已验证的 hash。
+// 标签页标题不写在这里，直接从 PRD 的 H1 读，避免文档改标题后与产物漂移。
+const prdDir = join(root, 'docs/premium-settlement');
+const prdPages = {
+  '结算管理列表PRD-20260920.md': { hash: '#/settlement' },
+  '结算账期详情PRD-20260920.md': { hash: '#/settlement/bill/offline/offline-tm003-paying' },
+  '结算管理详情-线上自动分账PRD-20260920.md': { hash: '#/settlement/bill/thirdParty/thirdParty-tm005-weekly-paid-1' },
+  '订单分账异常PRD-20260920.md': { hash: '#/review/order/split-failure' },
+  '结算审批列表PRD-20260920.md': { hash: '#/settlement/approval' },
+  '景区商家分成配置PRD-20260920.md': { hash: '#/review/member/merchant' },
+  '渠道分成配置PRD-20260920.md': { hash: '#/review/member/channel' },
+  '推广方分成配置PRD-20260920.md': { hash: '#/review/promotion/create' },
+};
+
+const escapeHtml = (text) => text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+/** 标签页标题取 PRD 的 H1（去掉尾部「 PRD」）；取不到时退回文件名 */
+function prdTitle(mdName) {
+  const h1 = (readFileSync(join(prdDir, mdName), 'utf8').match(/^#\s+(.+)$/m) || [])[1];
+  return escapeHtml((h1 || mdName.replace(/\.md$/, '')).replace(/\s*PRD$/, '').trim());
+}
+
+if (prd) {
+  // 双向校验：目录里有未登记的 PRD（忘登记），或登记的文件已改名/删除（留孤儿产物），都直接失败。
+  const mdFiles = (existsSync(prdDir) ? readdirSync(prdDir) : []).filter((name) => /PRD.*\.md$/.test(name));
+  const unregistered = mdFiles.filter((name) => !prdPages[name]);
+  const missing = Object.keys(prdPages).filter((name) => !existsSync(join(prdDir, name)));
+  if (unregistered.length || missing.length) {
+    if (unregistered.length) console.error(`以下 PRD 尚未登记落地页，请补充 prdPages 映射：${unregistered.join('、')}`);
+    if (missing.length) console.error(`prdPages 中登记的 PRD 文件不存在（已改名或删除？）：${missing.join('、')}`);
+    process.exit(1);
+  }
+  const prdKey = prd.endsWith('.md') ? prd : `${prd}.md`;
+  const targets = prd === 'all'
+    ? Object.entries(prdPages)
+    : prdPages[prdKey]
+      ? [[prdKey, prdPages[prdKey]]]
+      : null;
+  if (!targets) {
+    console.error(`不支持的 PRD 页：${prd}。可用值：all, ${Object.keys(prdPages).join('、')}`);
+    process.exit(1);
+  }
+  for (const [mdName, target] of targets) {
+    // 每页两个差异：标签页标题、hash 为空时的落地页。都在副本上改，替换值用函数形式避免 $& 被当反向引用。
+    const title = prdTitle(mdName);
+    const titleTag = `<title>${title}</title>`;
+    const hashScript = `<script>if(!location.hash)location.hash='${target.hash}';</script>\n`;
+    const prdHtml = html
+      .replace(/<title>[\s\S]*?<\/title>/, () => titleTag)
+      .replace(marker, () => `${hashScript}${marker}`);
+    // 写盘前自检：构建产物结构变了（找不到 <title> 或 module script）会导致注入静默失效，产出一堆落到兜底路由的页。
+    if (!prdHtml.includes(titleTag) || !prdHtml.includes(hashScript)) {
+      console.error(`注入失败：dist/index.html 的结构可能已变化（缺少 <title> 或 <script type="module">），请检查本脚本的替换目标。`);
+      process.exit(1);
+    }
+    const prdFile = join(dist, mdName.replace(/\.md$/, '.html'));
+    writeFileSync(prdFile, prdHtml);
+    console.log(`已生成 PRD 页：${prdFile}（${(prdHtml.length / 1024 / 1024).toFixed(2)} MB）`);
   }
 }
