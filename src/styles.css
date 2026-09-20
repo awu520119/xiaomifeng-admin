@@ -460,6 +460,14 @@ select {
   line-height: 18px;
 }
 
+/* 字段名后的口径说明：随标签行展示，视觉上弱于字段名 */
+.field-label-hint {
+  margin-inline-start: 8px;
+  color: #8f9499;
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .field-error {
   display: block;
   margin-top: 5px;
@@ -1254,6 +1262,23 @@ select {
 
 .settle-tag {
   margin-inline-end: 0;
+}
+
+.amount-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 账期级分账异常标识：悬浮展示异常笔数，点击进入账期详情 */
+.split-anomaly-icon {
+  color: #ff4d4f;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.split-anomaly-icon:hover {
+  color: #d9363e;
 }
 
 /* ============================================================

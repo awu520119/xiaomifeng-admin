@@ -1884,6 +1884,23 @@ export function billOrderDisplay(bill: SettlementRow, order: Order, factor: numb
   };
 }
 
+/** 账期级分账异常统计：分账失败 + 回退失败（回退状态优先于分账状态，与明细口径一致） */
+export function billSplitAnomaly(bill: SettlementRow, orders: Order[]): {
+  total: number; splitFailed: number; reversalFailed: number;
+} {
+  let splitFailed = 0;
+  let reversalFailed = 0;
+  if (settlementViewFundingMode(bill.view) === 'order_split') {
+    (orders || []).forEach(order => {
+      if (!settlementShareForAccount(order, bill.account)) return;
+      const status = order.reversalStatus || order.splitStatus || '';
+      if (status === '分账失败') splitFailed += 1;
+      if (status === '回退失败') reversalFailed += 1;
+    });
+  }
+  return { total: splitFailed + reversalFailed, splitFailed, reversalFailed };
+}
+
 export function billMetrics(bill: SettlementRow, orders: Order[]): {
   orderCount: number; income: number; refundAmount: number; payable: number; baseShareAmount: number; premiumAmount: number; netSettledAmount: number; feeDisplay: string;
 } {

@@ -57,11 +57,32 @@ import {
   validateMemberConfig,
 } from '../mock/engine';
 import { useShare } from '../mock/store';
-import type { AccountConfig, ChannelConfig, MerchantConfig, PointShareRule, TenantMember } from '../mock/types';
+import type { AccountConfig, ChannelConfig, MerchantConfig, PointShareRule, SettlementCycleType, SplitMode, TenantMember } from '../mock/types';
 
 const { useApp } = App;
 function cycleText(value?: string): string {
   return value === 'weekly' ? '周结' : value === 'monthly' ? '月结' : '未配置';
+}
+
+/** 默认结算周期随分账方式：线上自动分账按周发起、资金节奏快 → 周结；线下对公结算走发票与审批 → 月结 */
+function defaultCycleForSplitMode(splitMode: SplitMode): SettlementCycleType {
+  return isSplitSettlementMode(splitMode) ? 'weekly' : 'monthly';
+}
+
+/**
+ * 新建对象时，结算周期若仍是上一个分账方式的默认值（说明用户没主动改过），跟随新方式给默认值；
+ * 已保存过的对象不跟随，改周期仍走「下一期生效」的既有流程。
+ */
+function splitModeChange(
+  config: AccountConfig,
+  nextMode: SplitMode,
+  isNew: boolean,
+): { splitMode: SplitMode; settlementCycle: SettlementCycleType } {
+  const untouched = !config.pendingSettlementCycle && config.settlementCycle === defaultCycleForSplitMode(config.splitMode);
+  return {
+    splitMode: nextMode,
+    settlementCycle: isNew && untouched ? defaultCycleForSplitMode(nextMode) : (config.settlementCycle || 'monthly'),
+  };
 }
 
 function cycleEffectiveAt(current?: string): string {
@@ -69,8 +90,8 @@ function cycleEffectiveAt(current?: string): string {
 }
 
 function cycleFirstPeriod(next?: string, current?: string): string {
-  if (current === 'monthly' && next === 'weekly') return '2026-10-01 至 2026-10-05（过渡账期）';
-  if (current === 'weekly' && next === 'monthly') return '2026-09-21 至 2026-10-01（过渡账期）';
+  if (current === 'monthly' && next === 'weekly') return '2026-10-01 至 2026-10-05';
+  if (current === 'weekly' && next === 'monthly') return '2026-09-21 至 2026-10-01';
   return next === 'weekly' ? '2026-09-21 至 2026-09-28' : '2026-10-01 至 2026-11-01';
 }
 
@@ -115,6 +136,7 @@ function configTypeOfRole(roleId: string): 'merchant' | 'channel' | '' {
 function Field(props: {
   label: string;
   required?: boolean;
+  labelHint?: string;
   hint?: string;
   error?: string;
   children: ReactNode;
@@ -126,6 +148,7 @@ function Field(props: {
         <span className="drawer-field-label">
           {props.required ? <span className="required-mark">*</span> : null}
           {props.label}
+          {props.labelHint ? <span className="field-label-hint">{props.labelHint}</span> : null}
         </span>
       ) : null}
       {props.children}
@@ -405,11 +428,9 @@ export default function MemberManagementPage() {
         title: '确认修改结算周期？',
         content: (
           <div>
-            <div>当前周期：{cycleText(config.settlementCycle)}</div>
-            <div>修改后周期：{cycleText(config.pendingSettlementCycle)}</div>
-            <div>生效时间：{cycleEffectiveAt(config.settlementCycle)}</div>
+            <div style={{ marginBottom: 8 }}>{cycleText(config.settlementCycle)} → {cycleText(config.pendingSettlementCycle)}</div>
             <div>首个新账期：{cycleFirstPeriod(config.pendingSettlementCycle, config.settlementCycle)}</div>
-            <div className="field-sub" style={{ marginTop: 8 }}>新周期将在当前账期结束后生效，不影响历史账期。</div>
+            <div className="field-sub" style={{ marginTop: 8 }}>历史账期不受影响。</div>
           </div>
         ),
         okText: '确认保存',
@@ -702,6 +723,7 @@ export function MemberForm(props: {
         <MerchantConfigEditor
           config={props.config}
           setConfig={(cfg: AccountConfig) => props.setConfig(cfg)}
+          isNew={!props.editing}
           members={props.members}
           promotions={props.promotions}
           formSubmitted={props.formSubmitted}
@@ -712,6 +734,7 @@ export function MemberForm(props: {
           config={props.config}
           setConfig={(cfg: AccountConfig) => props.setConfig(cfg)}
           editingId={props.editing ? props.editing.id : ''}
+          isNew={!props.editing}
           members={props.members}
           promotions={props.promotions}
           formSubmitted={props.formSubmitted}
@@ -727,6 +750,7 @@ export function MemberForm(props: {
 function MerchantConfigEditor(props: {
   config: MerchantConfig;
   setConfig: (cfg: AccountConfig) => void;
+  isNew: boolean;
   members: TenantMember[];
   promotions: import('../mock/types').PromotionPartner[];
   formSubmitted: boolean;
@@ -820,7 +844,7 @@ function MerchantConfigEditor(props: {
       </Field>
 
       <Field label="分账方式" required>
-        <Radio.Group value={cfg.splitMode} onChange={(e) => patch({ splitMode: e.target.value })}>
+        <Radio.Group value={cfg.splitMode} onChange={(e) => patch(splitModeChange(cfg, e.target.value, props.isNew))}>
           {SPLIT_MODE_OPTIONS.map((o) => (
             <Radio key={o.value} value={o.value}>
               {o.label}
@@ -829,7 +853,12 @@ function MerchantConfigEditor(props: {
         </Radio.Group>
       </Field>
 
-      <Field label="结算周期" required error={props.formSubmitted && !selectedCycle ? '请选择结算周期' : undefined}>
+      <Field
+        label="结算周期"
+        required
+        labelHint="线上自动分账按周期自动发起，线下对公结算按周期汇总账单"
+        error={props.formSubmitted && !selectedCycle ? '请选择结算周期' : undefined}
+      >
         <Radio.Group
           value={selectedCycle}
           onChange={(e) => {
@@ -982,6 +1011,7 @@ function ChannelConfigEditor(props: {
   config: ChannelConfig;
   setConfig: (cfg: AccountConfig) => void;
   editingId: string;
+  isNew: boolean;
   members: TenantMember[];
   promotions: import('../mock/types').PromotionPartner[];
   formSubmitted: boolean;
@@ -1030,7 +1060,7 @@ function ChannelConfigEditor(props: {
       </div>
 
       <Field label="分账方式" required>
-        <Radio.Group value={cfg.splitMode} onChange={(e) => patch({ splitMode: e.target.value })}>
+        <Radio.Group value={cfg.splitMode} onChange={(e) => patch(splitModeChange(cfg, e.target.value, props.isNew))}>
           {SPLIT_MODE_OPTIONS.map((o) => (
             <Radio key={o.value} value={o.value}>
               {o.label}
@@ -1039,7 +1069,12 @@ function ChannelConfigEditor(props: {
         </Radio.Group>
       </Field>
 
-      <Field label="结算周期" required error={props.formSubmitted && !selectedCycle ? '请选择结算周期' : undefined}>
+      <Field
+        label="结算周期"
+        required
+        labelHint="线上自动分账按周期自动发起，线下对公结算按周期汇总账单"
+        error={props.formSubmitted && !selectedCycle ? '请选择结算周期' : undefined}
+      >
         <Radio.Group
           value={selectedCycle}
           onChange={(e) => {

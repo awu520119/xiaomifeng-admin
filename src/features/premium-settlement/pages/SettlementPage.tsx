@@ -1,12 +1,12 @@
-import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
-import { App, Button, DatePicker, Input, Modal, Select, Space, Table, Tabs, Tag, Upload } from 'antd';
+import { ExclamationCircleFilled, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { App, Button, DatePicker, Input, Modal, Select, Space, Table, Tabs, Tag, Tooltip, Upload } from 'antd';
 import type { TableProps, UploadFile } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import 'dayjs/locale/zh-cn';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { moneyText, splitModeText, tagColor } from '../mock/constants';
-import { buildSettlementRows, tenantBusinessAccounts } from '../mock/engine';
+import { billSplitAnomaly, buildSettlementRows, tenantBusinessAccounts } from '../mock/engine';
 import { useShare } from '../mock/store';
 import type { InvoiceFile, SettlementRow, SettlementRowStatus } from '../mock/types';
 
@@ -29,7 +29,6 @@ const PERSPECTIVE_OPTIONS: { value: PerspectiveKey; label: string }[] = [
   { value: 'promotion', label: '推广方视角' },
 ];
 
-const THIRD_PARTY_STATUS: SettlementRowStatus[] = ['待分账', '已分账', '分账失败', '待回退', '已回退', '回退失败'];
 const OFFLINE_STATUS: SettlementRowStatus[] = ['出账中', '待申请', '审核中', '打款中', '已打款', '已驳回'];
 
 const OBJECT_LABEL: Record<string, string> = { merchant: '景区商家', channel: '渠道', promotion: '推广方' };
@@ -126,6 +125,28 @@ export default function SettlementPage() {
     ),
   };
 
+  // 线上自动分账：账期内存在分账失败 / 回退失败订单时，在应分账金额右侧展示异常标识
+  const anomalyIcon = (row: SettlementRow) => {
+    const anomaly = billSplitAnomaly(row, row.orders);
+    if (!anomaly.total) return null;
+    const detail = [
+      anomaly.splitFailed ? `分账失败 ${anomaly.splitFailed} 笔` : '',
+      anomaly.reversalFailed ? `回退失败 ${anomaly.reversalFailed} 笔` : '',
+    ].filter(Boolean).join(' / ');
+    return (
+      <Tooltip title={`分账异常：${detail}，请查看明细`}>
+        <ExclamationCircleFilled
+          className="split-anomaly-icon"
+          aria-label={`分账异常：${detail}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            navigate(detailPath(row));
+          }}
+        />
+      </Tooltip>
+    );
+  };
+
   const periodColumn = {
     title: '账期',
     key: 'period',
@@ -137,7 +158,10 @@ export default function SettlementPage() {
 
   const settlementAmountCell = (row: SettlementRow) => (
     <div className="settlement-amount-cell">
-      <span className="money-text">￥{moneyText(row.payable)}</span>
+      <span className="amount-line">
+        <span className="money-text">￥{moneyText(row.payable)}</span>
+        {view === 'thirdParty' ? anomalyIcon(row) : null}
+      </span>
       {row.objectType === 'merchant' ? (
         <span className="amount-breakdown">基础 ￥{moneyText(row.baseShareAmount)} + 溢价 ￥{moneyText(row.premiumAmount)}</span>
       ) : null}
@@ -150,7 +174,8 @@ export default function SettlementPage() {
     </Tag>
   );
 
-  const statusOptions = view === 'thirdParty' ? THIRD_PARTY_STATUS : OFFLINE_STATUS;
+  // 线上自动分账不提供状态筛选：账期级分账状态不再在列表展示，异常由应分账金额旁的异常标识承担
+  const statusOptions = OFFLINE_STATUS;
 
   const objectColumn = {
     title: '结算对象',
@@ -223,13 +248,6 @@ export default function SettlementPage() {
           width: 140,
           align: 'right',
           render: (_: unknown, row: SettlementRow) => <span className="money-text">￥{moneyText(row.netSettledAmount)}</span>,
-        },
-        {
-          title: '分账状态',
-          key: 'status',
-          width: 110,
-          align: 'center',
-          render: (_: unknown, row: SettlementRow) => statusTag(row),
         },
         {
           title: '操作',
@@ -485,14 +503,16 @@ export default function SettlementPage() {
               />
             </>
           ) : null}
-          <Select
-            allowClear
-            placeholder="状态"
-            style={{ width: 140 }}
-            value={status || undefined}
-            onChange={(value) => setStatus(value || '')}
-            options={statusFilterOptions}
-          />
+          {view !== 'thirdParty' ? (
+            <Select
+              allowClear
+              placeholder="状态"
+              style={{ width: 140 }}
+              value={status || undefined}
+              onChange={(value) => setStatus(value || '')}
+              options={statusFilterOptions}
+            />
+          ) : null}
           <Button
             type="link"
             icon={<ReloadOutlined />}
