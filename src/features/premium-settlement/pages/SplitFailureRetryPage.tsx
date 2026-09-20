@@ -24,14 +24,7 @@ export default function SplitFailureRetryPage() {
   const retryFunding = (current: Order) => {
     Modal.confirm({
       title: '确认重试分账？',
-      content: (
-        <div>
-          <div>订单号：{current.orderNo}</div>
-          <div>分账金额：￥{moneyText(current.settlementShares?.reduce((sum, share) => sum + Number(share.amount || 0), 0) || current.amount)}</div>
-          <div>收款方：{current.receiverSummary || current.accountName || '-'}</div>
-          <div>失败原因：{current.fundingFailReason || '未返回失败原因'}</div>
-        </div>
-      ),
+      content: '重试后将重新发起该笔分账。',
       okText: '确认重试',
       cancelText: '取消',
       onOk: () => message.success(`订单 ${current.orderNo} 已提交重试分账`),

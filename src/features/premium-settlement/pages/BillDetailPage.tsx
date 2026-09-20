@@ -62,16 +62,10 @@ export default function BillDetailPage() {
       message.error('当前角色无权重试分账');
       return;
     }
+    const isReversal = order.reversalStatus === '回退失败';
     Modal.confirm({
-      title: order.reversalStatus === '回退失败' ? '确认重试回退？' : '确认重试分账？',
-      content: (
-        <div>
-          <div>订单号：{order.orderNo}</div>
-          <div>{order.reversalStatus === '回退失败' ? '回退金额' : '分账金额'}：￥{moneyText(row ? billOrderDisplay(row, order, row.detailFactor || 1).payable : 0)}</div>
-          <div>收款方：{row ? `${row.account.account}（${row.account.name}）` : '-'}</div>
-          <div>失败原因：{order.fundingFailReason || '未返回失败原因'}</div>
-        </div>
-      ),
+      title: isReversal ? '确认重试回退？' : '确认重试分账？',
+      content: isReversal ? '重试后将重新发起该笔回退。' : '重试后将重新发起该笔分账。',
       okText: '确认重试',
       cancelText: '取消',
       onOk: () => {

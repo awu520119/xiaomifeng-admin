@@ -34,10 +34,9 @@ export function OrderDetailSections({ order }: { order: Order }) {
   const retryFunding = () => {
     if (!['分账失败', '回退失败'].includes(order.reversalStatus || order.splitStatus || '')) return;
     const isReversal = order.reversalStatus === '回退失败';
-    const fundingAmount = (order.settlementShares || []).reduce((sum, share) => sum + Number(share.amount || 0), 0) || order.amount;
     Modal.confirm({
       title: isReversal ? '确认重试回退？' : '确认重试分账？',
-      content: <div><div>订单号：{order.orderNo}</div><div>{isReversal ? '回退金额' : '分账金额'}：￥{moneyText(fundingAmount)}</div><div>收款方：{order.receiverSummary || order.accountName || '-'}</div><div>失败原因：{order.fundingFailReason || '未返回失败原因'}</div></div>,
+      content: isReversal ? '重试后将重新发起该笔回退。' : '重试后将重新发起该笔分账。',
       okText: '确认重试', cancelText: '取消',
       onOk: () => {
         submitFundingRetry(order.id, isReversal ? 'reversal' : 'split');
