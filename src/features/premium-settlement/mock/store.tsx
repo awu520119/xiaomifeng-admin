@@ -89,14 +89,33 @@ export function ShareProvider({ children }: { children: ReactNode }) {
           }));
           return;
         }
+        const order = orders.find((item) => item.id === orderId);
+        const retryingTransactions = (order?.splitTransactions || []).map((transaction) => (
+          transaction.status === '分账失败'
+            ? { ...transaction, status: '待分账' as const, failureReason: '' }
+            : transaction
+        ));
         setSeedOverrides((cur) => ({
           ...cur,
-          [orderId]: { ...(cur[orderId] || {}), splitStatus: '待分账', fundingFailReason: '' },
+          [orderId]: {
+            ...(cur[orderId] || {}),
+            splitStatus: '待分账',
+            fundingFailReason: '',
+            ...(retryingTransactions.length > 1 ? { splitTransactions: retryingTransactions } : {})
+          },
         }));
         settleTimers.current.push(window.setTimeout(() => {
           setSeedOverrides((cur) => ({
             ...cur,
-            [orderId]: { ...(cur[orderId] || {}), splitStatus: '已分账' },
+            [orderId]: {
+              ...(cur[orderId] || {}),
+              splitStatus: '已分账',
+              ...(retryingTransactions.length > 1 ? {
+                splitTransactions: retryingTransactions.map((transaction) => (
+                  transaction.status === '待分账' ? { ...transaction, status: '已分账' as const } : transaction
+                ))
+              } : {})
+            },
           }));
         }, FUNDING_RETRY_SETTLE_MS));
       },

@@ -58,10 +58,11 @@ import {
 } from '../mock/engine';
 import { useShare } from '../mock/store';
 import type { AccountConfig, ChannelConfig, MerchantConfig, PointShareRule, SettlementCycleType, SplitMode, TenantMember } from '../mock/types';
+import { buildPointParticipants, PointParticipantsButton } from './SplitParticipants';
 
 const { useApp } = App;
 function cycleText(value?: string): string {
-  return value === 'weekly' ? '周结' : value === 'monthly' ? '月结' : '未配置';
+  return value === 'weekly' ? '周结' : value === 'monthly' ? '月结' : value === 't1' ? 'T+1' : '未配置';
 }
 
 /** 默认结算周期随分账方式：线上自动分账按周发起、资金节奏快 → 周结；线下对公结算走发票与审批 → 月结 */
@@ -78,10 +79,11 @@ function splitModeChange(
   nextMode: SplitMode,
   isNew: boolean,
 ): { splitMode: SplitMode; settlementCycle: SettlementCycleType } {
+  if (nextMode === 'system') return { splitMode: nextMode, settlementCycle: 'monthly' };
   const untouched = !config.pendingSettlementCycle && config.settlementCycle === defaultCycleForSplitMode(config.splitMode);
   return {
     splitMode: nextMode,
-    settlementCycle: isNew && untouched ? defaultCycleForSplitMode(nextMode) : (config.settlementCycle || 'monthly'),
+    settlementCycle: isNew && untouched ? defaultCycleForSplitMode(nextMode) : (config.settlementCycle || 'weekly'),
   };
 }
 
@@ -100,6 +102,15 @@ function configWithCycleEffectiveAt(config: AccountConfig): AccountConfig {
     return { ...config, pendingCycleEffectiveAt: config.pendingCycleEffectiveAt || cycleEffectiveAt(config.settlementCycle) };
   }
   return config;
+}
+
+function SettlementCycleField({ value, isNew, submitted, onChange }: { value?: SettlementCycleType; isNew: boolean; submitted: boolean; onChange: (value: SettlementCycleType) => void }) {
+  return <Field label="结算周期" required error={submitted && !value ? '请选择结算周期' : undefined}>
+    {isNew ? <Radio.Group value={value} onChange={(event) => onChange(event.target.value as SettlementCycleType)}>
+      {SETTLEMENT_CYCLE_OPTIONS.map((option) => <Radio key={option.value} value={option.value}>{option.label}<Tooltip title={option.description}><InfoCircleOutlined style={{ marginInlineStart: 4, color: '#8F9499' }} /></Tooltip></Radio>)}
+    </Radio.Group> : <span className="readonly-box">{cycleText(value)}</span>}
+    {!isNew ? <span className="field-sub">结算周期创建后不可修改</span> : null}
+  </Field>;
 }
 
 export interface BaseMemberFields {
@@ -853,39 +864,9 @@ function MerchantConfigEditor(props: {
         </Radio.Group>
       </Field>
 
-      <Field
-        label="结算周期"
-        required
-        labelHint="线上自动分账按周期自动发起，线下对公结算按周期汇总账单"
-        error={props.formSubmitted && !selectedCycle ? '请选择结算周期' : undefined}
-      >
-        <Radio.Group
-          value={selectedCycle}
-          onChange={(e) => {
-            const next = e.target.value;
-            if (cfg.settlementCycle) {
-              patch({
-                pendingSettlementCycle: next === cfg.settlementCycle ? undefined : next,
-                pendingCycleEffectiveAt: undefined,
-              });
-            } else {
-              patch({ settlementCycle: next });
-            }
-          }}
-        >
-          {SETTLEMENT_CYCLE_OPTIONS.map((option) => (
-            <Radio key={option.value} value={option.value}>
-              {option.label}
-              <Tooltip title={option.description}>
-                <InfoCircleOutlined style={{ marginInlineStart: 4, color: '#8F9499' }} />
-              </Tooltip>
-            </Radio>
-          ))}
-        </Radio.Group>
-        {cfg.pendingSettlementCycle ? (
-          <span className="field-sub">当前{cycleText(cfg.settlementCycle)}，{cycleText(cfg.pendingSettlementCycle)}将在当前账期结束后生效</span>
-        ) : null}
-      </Field>
+      {autoSplit ? <SettlementCycleField value={selectedCycle} isNew={props.isNew} submitted={props.formSubmitted} onChange={(value) => patch({ settlementCycle: value, pendingSettlementCycle: undefined, pendingCycleEffectiveAt: undefined })} /> : (
+        <Field label="账期说明"><span className="readonly-box">按月汇总账期，次月 20 日可申请结算</span></Field>
+      )}
 
       {autoSplit ? (
         <Field
@@ -912,10 +893,6 @@ function MerchantConfigEditor(props: {
         拍摄点分成
       </div>
 
-      <p className="share-note point-share-note">
-        各方分成比例合计 ≤ 100%，剩余比例自动计为收款商户溢价。
-      </p>
-
       {rules.length === 0 && operatingPoints.length === 0 ? (
         <div className="empty-panel">该收款商户号名下暂无运营拍摄点，请核对收款主体与收款商户号</div>
       ) : rules.length === 0 ? (
@@ -927,8 +904,12 @@ function MerchantConfigEditor(props: {
             <span>收款商户自留比例</span>
             <span>{shareToTitle}</span>
             <span className="point-share-head-last">
-              溢价比例
+              最低溢价比例
+              <Tooltip title="按渠道分成与该拍摄点最高推广方分成预估；订单实际溢价按实际归因推广方计算。">
+                <InfoCircleOutlined style={{ color: '#8F9499' }} />
+              </Tooltip>
             </span>
+            <span>分成方</span>
           </div>
           {rules.map((rule, index) => {
               const auto = merchantPointAutoPremium(cfg, rule, props.members, props.promotions);
@@ -971,9 +952,10 @@ function MerchantConfigEditor(props: {
                     addonAfter="%"
                     value={auto.premium}
                   />
+                  <PointParticipantsButton point={rule.point} participants={buildPointParticipants({ point: rule.point, merchantConfig: cfg, members: props.members, promotions: props.promotions })} />
                   {auto.over ? (
                     <span className="context-hint is-danger point-share-err">
-                      分成合计 {auto.total}%，超 100%（超 {Math.max(0, Math.round((auto.total - 100) * 100) / 100)}%），请调低收款商户自留或{shareToTitle}比例
+                      按渠道及最高推广方比例计算，分成合计 {auto.total}%，超 100%（超 {Math.max(0, Math.round((auto.total - 100) * 100) / 100)}%），请调低收款商户自留或{shareToTitle}比例
                     </span>
                   ) : null}
                   {ruleError ? <span className="field-error rule-row-error">{ruleError}</span> : null}
@@ -1069,39 +1051,9 @@ function ChannelConfigEditor(props: {
         </Radio.Group>
       </Field>
 
-      <Field
-        label="结算周期"
-        required
-        labelHint="线上自动分账按周期自动发起，线下对公结算按周期汇总账单"
-        error={props.formSubmitted && !selectedCycle ? '请选择结算周期' : undefined}
-      >
-        <Radio.Group
-          value={selectedCycle}
-          onChange={(e) => {
-            const next = e.target.value;
-            if (cfg.settlementCycle) {
-              patch({
-                pendingSettlementCycle: next === cfg.settlementCycle ? undefined : next,
-                pendingCycleEffectiveAt: undefined,
-              });
-            } else {
-              patch({ settlementCycle: next });
-            }
-          }}
-        >
-          {SETTLEMENT_CYCLE_OPTIONS.map((option) => (
-            <Radio key={option.value} value={option.value}>
-              {option.label}
-              <Tooltip title={option.description}>
-                <InfoCircleOutlined style={{ marginInlineStart: 4, color: '#8F9499' }} />
-              </Tooltip>
-            </Radio>
-          ))}
-        </Radio.Group>
-        {cfg.pendingSettlementCycle ? (
-          <span className="field-sub">当前{cycleText(cfg.settlementCycle)}，{cycleText(cfg.pendingSettlementCycle)}将在当前账期结束后生效</span>
-        ) : null}
-      </Field>
+      {autoSplit ? <SettlementCycleField value={selectedCycle} isNew={props.isNew} submitted={props.formSubmitted} onChange={(value) => patch({ settlementCycle: value, pendingSettlementCycle: undefined, pendingCycleEffectiveAt: undefined })} /> : (
+        <Field label="账期说明"><span className="readonly-box">按月汇总账期，次月 20 日可申请结算</span></Field>
+      )}
 
       {autoSplit ? (
         <Field
@@ -1167,9 +1119,10 @@ function ChannelConfigEditor(props: {
                     />
                   </Field>
                   <div style={{ paddingTop: 22 }}>
-                    <Button type="link" danger size="small" onClick={() => removeRule(index)}>
-                      删除
-                    </Button>
+                    <Space size={0}>
+                      <PointParticipantsButton point={rule.point} disabled={!rule.point} participants={buildPointParticipants({ point: rule.point, merchantConfig: props.members.find((member) => member.accountConfig?.type === 'merchant')?.accountConfig as MerchantConfig | undefined, members: props.members, promotions: props.promotions, draftChannelConfig: cfg, draftChannelId: props.editingId })} />
+                      <Button type="link" danger size="small" onClick={() => removeRule(index)}>删除</Button>
+                    </Space>
                   </div>
                 </div>
                 {rule.point || dup || (props.formSubmitted && (!Number.isFinite(Number(rule.rate)) || Number(rule.rate) < 0 || Number(rule.rate) > 100)) ? (
@@ -1178,7 +1131,7 @@ function ChannelConfigEditor(props: {
                       <span className="context-hint is-danger">同一拍摄点只能配置一条渠道规则</span>
                     ) : state && state.over > 0 ? (
                       <span className="context-hint is-danger">
-                        该点分成合计 {state.total}%，已超 100%（超 {state.over}%）
+                        按最高推广方比例计算，该点分成合计 {state.total}%，已超 100%（超 {state.over}%）
                       </span>
                     ) : state ? (
                       <span className="remain-hint">

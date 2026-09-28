@@ -4,6 +4,7 @@ import {
   MenuUnfoldOutlined,
   OrderedListOutlined,
   ShopOutlined,
+  RocketOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
 import { Avatar, Button, Layout, Menu, Space, Typography } from 'antd';
@@ -17,21 +18,20 @@ import BillDetailPage from './features/premium-settlement/pages/BillDetailPage';
 import FundingScenarioPage from './features/premium-settlement/pages/FundingScenarioPage';
 import SplitFailureRetryPage from './features/premium-settlement/pages/SplitFailureRetryPage';
 import {
-  ApprovalDetailDemo,
-  ApprovalMerchantListDemo,
   MemberChannelCreateDemo,
   MemberMerchantCreateDemo,
   PromotionCreateDemo,
   SettlementCenterDemo,
 } from './features/premium-settlement/pages/IndependentPrototypePages';
 import OrderListPage from './features/premium-settlement/pages/OrderListPage';
-import SettlementApprovalPage from './features/premium-settlement/pages/SettlementApprovalPage';
+import TaskManagementPage from './features/premium-settlement/pages/TaskManagementPage';
+import FlightTaskDetailDemoPage from './features/premium-settlement/pages/FlightTaskDetailDemoPage';
 
 const { Header, Sider, Content } = Layout;
 
 const NAV_ITEMS = [
   { key: '/orders', label: '订单管理', icon: <OrderedListOutlined /> },
-  { key: '/settlement/approval', label: '结算审批', icon: <AccountBookOutlined /> },
+  { key: '/tasks', label: '任务管理', icon: <RocketOutlined /> },
   { key: '/settlement', label: '结算中心', icon: <AccountBookOutlined /> },
   { key: '/members', label: '成员管理', icon: <TeamOutlined /> },
   { key: '/promotion', label: '推广方管理', icon: <ShopOutlined /> },
@@ -47,17 +47,14 @@ function pageTitle(pathname: string): string {
   // 账单详情把页标题替换为“{结算方式}详情”
   const bill = pathname.match(/^\/settlement\/bill\/(thirdParty|offline|promotion)\//);
   if (bill && BILL_DETAIL_TITLE[bill[1]]) return BILL_DETAIL_TITLE[bill[1]];
-  const approvalBill = pathname.match(/^\/settlement\/approval\/bill\/(thirdParty|offline|promotion)\//);
-  if (approvalBill) return '结算审批详情';
-  if (pathname.startsWith('/settlement/approval')) return '结算审批';
   if (pathname.startsWith('/settlement')) return '结算中心';
   if (pathname.startsWith('/orders')) return '订单管理';
+  if (pathname.startsWith('/tasks')) return '任务管理';
   if (pathname.startsWith('/members')) return '成员管理';
   if (pathname.startsWith('/promotion') || pathname.startsWith('/review/promotion')) return '推广方管理';
   if (pathname.startsWith('/review/member')) return '成员管理';
   if (pathname.startsWith('/review/order')) return '订单管理';
   if (pathname.startsWith('/review/settlement')) return '结算中心';
-  if (pathname.startsWith('/review/approval')) return '结算审批';
   if (pathname.startsWith('/review/')) return '评审页面';
   return '';
 }
@@ -73,9 +70,7 @@ export default function App() {
       ? '/promotion'
       : location.pathname.startsWith('/review/order')
         ? '/orders'
-        : location.pathname.startsWith('/review/approval')
-          ? '/settlement/approval'
-          : location.pathname.startsWith('/review/settlement')
+        : location.pathname.startsWith('/review/settlement')
             ? '/settlement'
             : location.pathname;
   const selectedKey = NAV_ITEMS.find((item) =>
@@ -90,10 +85,14 @@ export default function App() {
           <Route path="/demo/funding/split" element={<FundingScenarioPage scenario="split" />} />
           <Route path="/demo/funding/split-retry" element={<SplitFailureRetryPage />} />
           <Route path="/demo/funding/reversal" element={<FundingScenarioPage scenario="reversal" />} />
-          <Route path="/demo/approval/merchant" element={<ApprovalMerchantListDemo />} />
-          <Route path="/demo/approval/detail-merchant" element={<ApprovalDetailDemo objectType="merchant" />} />
-          <Route path="/demo/approval/detail-channel" element={<ApprovalDetailDemo objectType="channel" />} />
-          <Route path="/demo/approval/detail-promotion" element={<ApprovalDetailDemo objectType="promotion" />} />
+          <Route path="/demo/export/order-split-failure" element={<FundingScenarioPage scenario="split" />} />
+          <Route path="/demo/export/order-multi-split" element={<FundingScenarioPage scenario="multiSplit" />} />
+          <Route path="/demo/export/order-flight-tasks" element={<FundingScenarioPage scenario="flightTasks" />} />
+          <Route path="/demo/export/order-reversal-failure" element={<FundingScenarioPage scenario="reversal" />} />
+          <Route path="/demo/export/flight-task-detail" element={<FlightTaskDetailDemoPage />} />
+          <Route path="/demo/export/member/merchant" element={<MemberMerchantCreateDemo />} />
+          <Route path="/demo/export/member/channel" element={<MemberChannelCreateDemo />} />
+          <Route path="/demo/export/promotion/create" element={<PromotionCreateDemo />} />
           <Route path="/demo/settlement-center" element={<SettlementCenterDemo />} />
           <Route path="/demo/member/merchant" element={<MemberMerchantCreateDemo />} />
           <Route path="/demo/member/channel" element={<MemberChannelCreateDemo />} />
@@ -152,20 +151,16 @@ export default function App() {
           <Content className="app-content">
             <Routes>
               <Route path="/orders" element={<OrderListPage />} />
+              <Route path="/tasks" element={<TaskManagementPage />} />
               <Route path="/members" element={<MemberManagementPage />} />
               <Route path="/promotion" element={<PromotionManagementPage />} />
               <Route path="/settlement/bill/:view/:billId" element={<BillDetailPage />} />
-              <Route path="/settlement/approval/bill/:view/:billId" element={<BillDetailPage />} />
-              <Route path="/settlement/approval" element={<SettlementApprovalPage />} />
               <Route path="/settlement" element={<SettlementPage />} />
               <Route path="/review/member/merchant" element={<MemberMerchantCreateDemo />} />
               <Route path="/review/member/channel" element={<MemberChannelCreateDemo />} />
               <Route path="/review/promotion/create" element={<PromotionCreateDemo />} />
               <Route path="/review/order/split-failure" element={<FundingScenarioPage scenario="split" />} />
               <Route path="/review/order/reversal-failure" element={<FundingScenarioPage scenario="reversal" />} />
-              <Route path="/review/approval/detail-merchant" element={<ApprovalDetailDemo objectType="merchant" />} />
-              <Route path="/review/approval/detail-channel" element={<ApprovalDetailDemo objectType="channel" />} />
-              <Route path="/review/approval/detail-promotion" element={<ApprovalDetailDemo objectType="promotion" />} />
               <Route path="/" element={<Navigate to="/members" replace />} />
               <Route path="*" element={<Navigate to="/members" replace />} />
             </Routes>

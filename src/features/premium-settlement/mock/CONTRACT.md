@@ -21,7 +21,7 @@ export type ObjectType = 'merchant' | 'channel' | 'promotion';
 export type PointMode = 'ratio' | 'premium';               // 拍摄点分成模式：按比例 / 按保底价
 export type AuditStatus = 'approved' | 'pending' | 'rejected';
 export type RoleId = 'tr_admin' | 'tr_scenic_ops' | 'tr_channel' | 'tr_finance' | 'tr_store_ops';
-export type SettlementCycleType = 'weekly' | 'monthly';
+export type SettlementCycleType = 'weekly' | 'monthly' | 't1';
 export type SplitEligibility = 'eligible' | 'ineligible' | 'unsynced';
 
 export interface TenantRole {
@@ -124,7 +124,7 @@ export interface Order {
   settlementEligible: boolean; settlementEligibleAt?: string;
   splitStatus?: string; reversalStatus?: string; splitNo?: string; reversalNo?: string;
   businessDate: string;
-  createdAt: string; completedAt: string;
+  createdAt: string; paidAt: string; completedAt: string;
   splitReceivers?: SplitReceiver[]; channelSnapshots?: OrderChannelSnapshot[];
   settlementShares?: OrderSplitShare[]; settlementMode?: string; splitScheme?: any;
   orderStatus?: string;                                     // 状态列等展示用派生
@@ -143,7 +143,7 @@ export type SettlementRowStatus =
 export interface SettlementRow {
   id: string; view: 'offline' | 'thirdParty' | 'promotion';
   period: string; businessDate: string; fundingMode: FundingMode;
-  cycleType: SettlementCycleType; periodStart: string; periodEnd: string; isEstimated: boolean;
+  cycleType: SettlementCycleType; periodStart: string; periodEnd: string; autoSplitAt?: string; isEstimated: boolean;
   account: { id: string; account: string; name: string; phone?: string; accountSource?: string; objectType: ObjectType };
   objectType: ObjectType; accountSource: 'B' | 'C';
   scenicText: string; scenicNames: string[];
@@ -263,7 +263,9 @@ export function ratioTitleForRuleRow(splitMode: SplitMode): string;             
 ### D3. 容量 / 上下文文案（成员、渠道、推广共用同一池）
 ```ts
 // 某 point 上所有已保存渠道 + 已参与推广（approved+enabled）的 rate 合计
+// 返回渠道分成合计 + 同一订单可能命中的最高推广方比例，用于单拍摄点容量校验。
 export function channelRateTotalForPoint(point: string, members: TenantMember[], promotions: PromotionPartner[]): number;
+export function promotionRateMaxForPoint(point: string, promotions: PromotionPartner[]): number;
 export function promotionRateTotalForPoint(point: string, promotions: PromotionPartner[]): number;
 
 // 单点上下文（渠道规则行 / 商家点规则行下方灰字）。remaining 需基于“可分配容量 − 已占用(排除自身草稿视场景)”。

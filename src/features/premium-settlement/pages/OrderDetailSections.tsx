@@ -1,9 +1,12 @@
-import { App, Button, Descriptions, Modal, Space, Tabs, Tag, Timeline } from 'antd';
+import { App, Button, Descriptions, Drawer, Modal, Space, Table, Tabs, Tag, Timeline } from 'antd';
+import { DownOutlined, UpOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { FUNDING_RETRY_SETTLE_MS, moneyText, splitModeText, tagColor } from '../mock/constants';
 import { useShare } from '../mock/store';
 import type { Order } from '../mock/types';
+import { createFlightTasks, FlightTaskDetailDrawer, FlightTaskIdLink } from './FlightTaskDetail';
+import type { FlightTask } from './FlightTaskDetail';
 
 const { useApp } = App;
 
@@ -19,24 +22,39 @@ export function OrderDetailSection({ title, children, className = '' }: { title:
 }
 
 /** 订单详情正文：抽屉（订单管理）与两个独立演示页共用同一份实现，保证两边不会各改各的 */
-export function OrderDetailSections({ order }: { order: Order }) {
+export function OrderDetailSections({ order, onOpenFlightTask }: { order: Order; onOpenFlightTask?: (task: FlightTask) => void }) {
   const { retryFunding: submitFundingRetry } = useShare();
   const { message } = useApp();
   const [mediaTab, setMediaTab] = useState<MediaTab>('movie');
   const [mediaVersion, setMediaVersion] = useState<'original' | 'clean'>('original');
+  const [flightTaskOpen, setFlightTaskOpen] = useState(false);
+  const [splitTransactionOpen, setSplitTransactionOpen] = useState(false);
 
   const shootInfo = order.shootInfo || {};
+  const flightTasks = createFlightTasks(order);
+  const [selectedFlightTask, setSelectedFlightTask] = useState<FlightTask>(flightTasks[0]);
+  const [flightTasksExpanded, setFlightTasksExpanded] = useState(false);
   const flowLogs = order.flowLogs || [{ time: order.createdAt, title: '订单生成' }, { time: order.completedAt || order.createdAt, title: order.completedAt ? '拍摄流程结束' : '等待履约' }];
   const mediaUrl = (seed: string, clean = false) => `https://picsum.photos/seed/${seed}${clean ? '-ai' : ''}/1200/675`;
-  const fundingStatus = () => order.fundingMode !== 'order_split' ? '-' : order.reversalStatus || order.splitStatus || '待分账';
-  const fundingFailure = order.splitStatus === '分账失败' || order.reversalStatus === '回退失败';
+  const fundingStatus = () => order.fundingMode !== 'order_split' ? '-' : order.splitStatus === '回退失败' ? '已分账' : order.splitStatus || '待分账';
+  const reversalStatus = order.reversalStatus || (order.splitStatus === '回退失败' ? '回退失败' : '');
+  const splitTransactions = order.splitTransactions || [];
+  const hasMultipleSplitTransactions = splitTransactions.length > 1;
+  const failedSplitTransactions = splitTransactions.filter((transaction) => transaction.status === '分账失败');
+  const splitFailure = order.splitStatus === '分账失败' || order.splitStatus === '部分分账失败';
+  const reversalFailure = order.reversalStatus === '回退失败' || order.splitStatus === '回退失败';
+  const openFlightTask = (task: FlightTask) => {
+    setSelectedFlightTask(task);
+    if (onOpenFlightTask) onOpenFlightTask(task);
+    else setFlightTaskOpen(true);
+  };
 
   const retryFunding = () => {
-    if (!['分账失败', '回退失败'].includes(order.reversalStatus || order.splitStatus || '')) return;
-    const isReversal = order.reversalStatus === '回退失败';
+    if (!splitFailure && !reversalFailure) return;
+    const isReversal = reversalFailure;
     Modal.confirm({
-      title: isReversal ? '确认重试回退？' : '确认重试分账？',
-      content: isReversal ? '重试后将重新发起该笔回退。' : '重试后将重新发起该笔分账。',
+      title: isReversal ? '确认重试回退？' : (hasMultipleSplitTransactions ? '确认重试失败分账？' : '确认重试分账？'),
+      content: isReversal ? '重试后将重新发起该笔回退。' : (hasMultipleSplitTransactions ? '重试后将重新发起失败分账。' : '重试后将重新发起该笔分账。'),
       okText: '确认重试', cancelText: '取消',
       onOk: () => {
         submitFundingRetry(order.id, isReversal ? 'reversal' : 'split');
@@ -60,9 +78,49 @@ export function OrderDetailSections({ order }: { order: Order }) {
         {mediaTab === 'raw' ? <div className="media-photo-grid">{[1, 2, 3, 4].map((index) => <div className="media-video-card media-raw-card" key={index}><img src={mediaUrl(`order-${order.id}-raw-${index}`, mediaVersion === 'clean')} alt={`原视频 ${index}`} /><span className="media-duration">00:{['21', '18', '24', '16'][index - 1]}</span></div>)}</div> : null}
       </OrderDetailSection>
       <OrderDetailSection title="订单信息" className="order-info-section"><div className="order-status-stamp" style={{ borderColor: tagColor(order.status), color: tagColor(order.status) }}>{order.status}</div><Descriptions column={2} size="small"><Descriptions.Item label="订单号">{order.orderNo}</Descriptions.Item><Descriptions.Item label="支付金额"><span className="order-detail-highlight">￥{moneyText(order.paidAmount || order.amount)}</span></Descriptions.Item><Descriptions.Item label="支付方式">{['待付款', '已取消'].includes(order.status) ? '-' : order.paymentWay || '汇付支付'}</Descriptions.Item><Descriptions.Item label="订单时间">{order.createdAt}</Descriptions.Item><Descriptions.Item label="手机号">{order.phone}</Descriptions.Item><Descriptions.Item label="订单用户">{order.user}</Descriptions.Item><Descriptions.Item label="订单类型">{order.orderType}</Descriptions.Item></Descriptions></OrderDetailSection>
-      <OrderDetailSection title="收款信息"><Descriptions column={2} size="small"><Descriptions.Item label="收款主体">{order.payer || (order.collectionMode === 'merchant' ? '景区商家' : '自营方')}</Descriptions.Item><Descriptions.Item label="景区分账方式">{order.receiverSummary || splitModeText(order.splitMode)}</Descriptions.Item><Descriptions.Item label="支付流水号">{order.transactionId || '-'}</Descriptions.Item><Descriptions.Item label="分账流水号">{order.splitNo || '-'}</Descriptions.Item><Descriptions.Item label="收款商户">{order.payerMchid ? `${order.payerMchid}（${order.payer || '自营收款'}）` : '-'}</Descriptions.Item><Descriptions.Item label="退款单号">{order.refundAmount ? `REFUND${order.id.slice(-10)}` : '-'}</Descriptions.Item><Descriptions.Item label="分账状态"><div className="order-funding-status-cell">{fundingStatus() === '-' ? <span className="muted-text">-</span> : <Tag color={tagColor(fundingStatus())}>{fundingStatus()}</Tag>}{fundingFailure ? <><span className="order-funding-failure">原因：{order.fundingFailReason || '未返回失败原因'}</span><Button type="link" size="small" onClick={retryFunding}>{order.reversalStatus === '回退失败' ? '重试回退' : '重试分账'}</Button></> : null}</div></Descriptions.Item></Descriptions></OrderDetailSection>
-      <OrderDetailSection title="主题信息"><Descriptions column={2} size="small"><Descriptions.Item label="主题名称">{shootInfo.themeName || order.theme}</Descriptions.Item><Descriptions.Item label="所属景区">{shootInfo.scenicName || order.scenicName}</Descriptions.Item><Descriptions.Item label="拍摄点">{shootInfo.shootPoint || order.point}</Descriptions.Item><Descriptions.Item label="航线">{shootInfo.route || '定点环绕航线'}</Descriptions.Item><Descriptions.Item label="剪辑模板">{shootInfo.clipTemplate || '电影感快剪模板'}</Descriptions.Item><Descriptions.Item label="运镜说明">{shootInfo.motionDesc || '按主题预设运镜自动执行'}</Descriptions.Item><Descriptions.Item label="拍摄人数">{shootInfo.peopleCount || '不限人数'}</Descriptions.Item></Descriptions></OrderDetailSection>
+      <OrderDetailSection title="收款信息"><Descriptions column={2} size="small">
+        <Descriptions.Item label="收款主体">{order.payer || (order.collectionMode === 'merchant' ? '景区商家' : '自营方')}</Descriptions.Item>
+        <Descriptions.Item label="景区分账方式">{order.receiverSummary || splitModeText(order.splitMode)}</Descriptions.Item>
+        <Descriptions.Item label="支付流水号">{order.transactionId || '-'}</Descriptions.Item>
+        <Descriptions.Item label="分账流水号">{hasMultipleSplitTransactions ? <Button type="link" size="small" onClick={() => setSplitTransactionOpen(true)}>共 {splitTransactions.length} 笔，查看</Button> : (order.splitNo || '-')}</Descriptions.Item>
+        <Descriptions.Item label="收款商户">{order.payerMchid ? `${order.payerMchid}（${order.payer || '自营收款'}）` : '-'}</Descriptions.Item>
+        <Descriptions.Item label="退款单号">{order.refundAmount ? `REFUND${order.id.slice(-10)}` : '-'}</Descriptions.Item>
+        <Descriptions.Item label="分账状态"><div className="order-funding-status-cell">
+          {fundingStatus() === '-' ? <span className="muted-text">-</span> : <Tag color={tagColor(fundingStatus())}>{fundingStatus()}</Tag>}
+          {splitFailure ? <>
+            <span className="order-funding-failure">{hasMultipleSplitTransactions ? `${splitTransactions.length} 笔中 ${failedSplitTransactions.length} 笔失败` : `原因：${order.fundingFailReason || '未返回失败原因'}`}</span>
+            {hasMultipleSplitTransactions ? <Button type="link" size="small" onClick={() => setSplitTransactionOpen(true)}>查看失败原因</Button> : null}
+            <Button type="link" size="small" onClick={retryFunding}>{hasMultipleSplitTransactions ? '重试失败分账' : '重试分账'}</Button>
+          </> : null}
+        </div></Descriptions.Item>
+        <Descriptions.Item label="回退状态"><div className="order-funding-status-cell">
+          {reversalStatus ? <Tag color={tagColor(reversalStatus)}>{reversalStatus}</Tag> : <span className="muted-text">-</span>}
+          {reversalFailure ? <><span className="order-funding-failure">原因：{order.fundingFailReason || '未返回失败原因'}</span><Button type="link" size="small" onClick={retryFunding}>重试回退</Button></> : null}
+        </div></Descriptions.Item>
+      </Descriptions></OrderDetailSection>
+      <OrderDetailSection title="主题信息"><Descriptions column={2} size="small"><Descriptions.Item label="主题名称">{shootInfo.themeName || order.theme}</Descriptions.Item><Descriptions.Item label="所属景区">{shootInfo.scenicName || order.scenicName}</Descriptions.Item><Descriptions.Item label="拍摄点">{shootInfo.shootPoint || order.point}</Descriptions.Item><Descriptions.Item label="航线">{shootInfo.route || '定点环绕航线'}</Descriptions.Item><Descriptions.Item label="剪辑模板">{shootInfo.clipTemplate || '电影感快剪模板'}</Descriptions.Item><Descriptions.Item label="运镜说明">{shootInfo.motionDesc || '按主题预设运镜自动执行'}</Descriptions.Item><Descriptions.Item label="拍摄人数">{shootInfo.peopleCount || '不限人数'}</Descriptions.Item><Descriptions.Item label="起飞任务 ID"><div className="order-flight-task-list">{flightTasks.slice(0, flightTasks.length > 1 && !flightTasksExpanded ? 1 : undefined).map((task) => <div className="order-flight-task-row" key={task.id}><FlightTaskIdLink task={task} onClick={() => openFlightTask(task)} /></div>)}{flightTasks.length > 1 ? <Button className="order-flight-task-toggle" type="link" size="small" onClick={() => setFlightTasksExpanded((expanded) => !expanded)}>{flightTasksExpanded ? '收起' : `展开其余 ${flightTasks.length - 1} 条`} {flightTasksExpanded ? <UpOutlined /> : <DownOutlined />}</Button> : null}</div></Descriptions.Item></Descriptions></OrderDetailSection>
       <OrderDetailSection title="流程日志"><Timeline items={flowLogs.map((log) => ({ label: log.time, children: log.title }))} /></OrderDetailSection>
+      <Drawer
+        title="分账流水明细"
+        open={splitTransactionOpen}
+        width={640}
+        onClose={() => setSplitTransactionOpen(false)}
+        footer={failedSplitTransactions.length ? <Button type="primary" onClick={retryFunding}>重试失败分账</Button> : <Button onClick={() => setSplitTransactionOpen(false)}>关闭</Button>}
+      >
+        <Table
+          rowKey="id"
+          size="small"
+          pagination={false}
+          dataSource={splitTransactions}
+          columns={[
+            { title: '分账流水号', dataIndex: 'splitNo', key: 'splitNo', ellipsis: true },
+            { title: '分账方数量', dataIndex: 'receiverCount', key: 'receiverCount', width: 110, align: 'center' },
+            { title: '状态', dataIndex: 'status', key: 'status', width: 108, render: (status: string) => <Tag color={tagColor(status)}>{status}</Tag> },
+            { title: '失败原因', dataIndex: 'failureReason', key: 'failureReason', width: 170, render: (reason?: string) => reason || <span className="muted-text">-</span> }
+          ]}
+        />
+      </Drawer>
+      {!onOpenFlightTask ? <FlightTaskDetailDrawer task={selectedFlightTask} open={flightTaskOpen} onClose={() => setFlightTaskOpen(false)} /> : null}
     </div>
   );
 }

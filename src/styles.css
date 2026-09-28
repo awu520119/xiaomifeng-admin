@@ -522,9 +522,53 @@ select {
 }
 .point-share-line {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) 0.85fr 0.9fr 1fr;
+  grid-template-columns: minmax(0, 1.1fr) repeat(3, minmax(0, 0.75fr)) auto;
   gap: 0 10px;
   align-items: center;
+}
+
+.point-share-row .ant-btn-link {
+  padding-inline: 0;
+  white-space: nowrap;
+}
+
+.point-participant-popover-overlay {
+  max-width: 480px;
+}
+
+.point-participant-popover {
+  width: 440px;
+}
+
+.point-participant-group + .point-participant-group {
+  margin-top: 14px;
+}
+
+.point-participant-group-title {
+  margin-bottom: 6px;
+  color: #6a737d;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.point-participant-popover .point-participant-group .ant-table-wrapper {
+  max-height: 172px;
+  overflow-y: auto;
+}
+
+.point-participant-popover .ant-table-thead > tr > th,
+.point-participant-popover .ant-table-tbody > tr > td {
+  padding-block: 7px;
+}
+
+.point-participant-promotion-note {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: #e6f4ff;
+  color: #1677ff;
+  font-size: 12px;
+  font-weight: 500;
 }
 .point-share-head {
   padding: 7px 12px;
@@ -826,6 +870,88 @@ select {
   padding: 0 28px 28px;
 }
 
+.order-flight-task-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.order-flight-task-title .ant-btn {
+  padding-inline: 0;
+  color: #1677ff;
+  font-size: 14px;
+}
+
+.order-flight-task-title > span {
+  padding-left: 12px;
+  border-left: 1px solid #e8e8e8;
+}
+
+.order-flight-task-view {
+  padding-top: 24px;
+}
+
+.task-filter-card,
+.task-table-card {
+  padding: 16px;
+}
+
+.task-filter-card {
+  margin-bottom: 16px;
+}
+
+.task-filter-row {
+  display: flex;
+  width: 100%;
+}
+
+.task-filter-row .task-id-search {
+  width: 240px;
+}
+
+.task-filter-row .ant-picker {
+  width: 286px;
+}
+
+.task-filter-row .ant-select {
+  width: 180px;
+}
+
+.task-table-card .ant-table-thead > tr > th {
+  background: #fafafa;
+  color: #8c9298;
+}
+
+@media (max-width: 1200px) {
+  .task-filter-row {
+    flex-wrap: wrap;
+  }
+}
+
+.order-flight-task-list {
+  display: grid;
+  gap: 2px;
+  min-width: 270px;
+}
+
+.order-flight-task-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 30px;
+  padding-right: 6px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.order-flight-task-row:last-child {
+  border-bottom: 0;
+}
+
+.order-flight-task-toggle {
+  justify-self: start;
+  padding: 2px 0;
+}
+
 .order-detail-section {
   position: relative;
   padding: 24px 0 10px;
@@ -874,6 +1000,160 @@ select {
   line-height: 1;
   transform: rotate(-14deg);
   opacity: 0.9;
+}
+
+.flight-task-drawer .ant-drawer-body {
+  padding: 24px 28px 36px;
+}
+
+.flight-task-detail-section {
+  margin-bottom: 22px;
+}
+
+.flight-task-detail-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  color: #303338;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.flight-task-detail-section h3 > span {
+  width: 4px;
+  height: 16px;
+  border-radius: 2px;
+  background: #1677ff;
+}
+
+.flight-task-detail .ant-descriptions-item-label {
+  color: #8f9499;
+  white-space: nowrap;
+}
+
+.flight-task-duration-section {
+  margin-top: 8px;
+}
+
+.flight-task-duration-card {
+  display: flex;
+  min-height: 92px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: linear-gradient(110deg, #66b8f2 0%, #3687ec 100%);
+  color: #fff;
+}
+
+.flight-task-duration-card span {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.flight-task-duration-card strong {
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+.flight-task-timeline {
+  padding-top: 6px;
+}
+
+.flight-task-phase {
+  margin-bottom: 22px;
+}
+
+.flight-task-phase-title {
+  display: inline-block;
+  min-width: 76px;
+  margin: 0 0 10px 4px;
+  padding: 2px 10px;
+  background: linear-gradient(110deg, #e8f0ff, #f7f9ff);
+  color: #8ca8d8;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.flight-task-event {
+  display: grid;
+  grid-template-columns: 112px 18px minmax(0, 1fr);
+  column-gap: 12px;
+  min-height: 70px;
+  padding-bottom: 10px;
+}
+
+.flight-task-event-time {
+  color: #42464c;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.flight-task-event-rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.flight-task-event-rail::before {
+  position: absolute;
+  top: 0;
+  bottom: -10px;
+  left: 8px;
+  width: 2px;
+  background: #edf0f4;
+  content: '';
+}
+
+.flight-task-event-rail i {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+  border: 3px solid #c7d5ee;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.flight-task-event.is-last .flight-task-event-rail::before {
+  bottom: 100%;
+}
+
+.flight-task-event-content {
+  min-width: 0;
+}
+
+.flight-task-event-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #383c42;
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.flight-task-event-main > span:last-child {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.flight-task-event-main .is-overrun {
+  color: #faad14;
+}
+
+.flight-task-event-main small {
+  display: block;
+  color: #ffc069;
+  font-size: 12px;
+}
+
+.flight-task-event-warning {
+  margin-top: 8px;
+  color: #ff4d4f;
+  font-size: 14px;
+  line-height: 21px;
 }
 
 .order-rating {
@@ -1753,6 +2033,26 @@ select {
   min-height: 100vh;
   padding: 32px 24px 48px;
   background: #f5f5f5;
+}
+
+.demo-export-page {
+  min-height: 100vh;
+  padding: 32px 24px 48px;
+  background: #f5f5f5;
+}
+
+.demo-export-page > .demo-drawer-host {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.demo-export-page .demo-drawer-host .ant-drawer .ant-drawer-section {
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.demo-flight-task-export > .demo-drawer-host {
+  max-width: 800px;
 }
 
 /* 与「订单管理」右侧抽屉同宽，正文排版逐像素一致 */

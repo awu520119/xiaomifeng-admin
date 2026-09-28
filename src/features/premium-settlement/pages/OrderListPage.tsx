@@ -7,13 +7,15 @@ import { moneyText, tagColor } from '../mock/constants';
 import { useShare } from '../mock/store';
 import type { Order } from '../mock/types';
 import { OrderDetailSections } from './OrderDetailSections';
+import { FlightTaskDetailDrawer } from './FlightTaskDetail';
+import type { FlightTask } from './FlightTaskDetail';
 
 const { RangePicker } = DatePicker;
 const { useApp } = App;
 type OrderTab = '' | '待付款' | '待使用' | '已使用' | '退款中' | '退款失败' | '已完成' | '已退款' | '已取消';
 
 const ORDER_STATUS_TABS: OrderTab[] = ['', '待付款', '待使用', '已使用', '退款中', '退款失败', '已完成', '已退款', '已取消'];
-const DEFAULT_RANGE: [dayjs.Dayjs, dayjs.Dayjs] = [dayjs('2026-09-01'), dayjs('2026-10-23')];
+const DEFAULT_RANGE: [dayjs.Dayjs, dayjs.Dayjs] = [dayjs('2026-05-01'), dayjs('2026-10-23')];
 
 export default function OrderListPage() {
   const { orders } = useShare();
@@ -25,6 +27,7 @@ export default function OrderListPage() {
   const [accountId, setAccountId] = useState('');
   const [keyword, setKeyword] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedFlightTask, setSelectedFlightTask] = useState<FlightTask | null>(null);
   const [summaryExpanded, setSummaryExpanded] = useState(true);
 
   const options = (values: string[]) => Array.from(new Set(values.filter(Boolean))).map((value) => ({ value, label: value }));
@@ -60,7 +63,10 @@ export default function OrderListPage() {
       : <span className="muted-text">暂无</span>;
   };
   const canRefund = (order: Order) => ['待使用', '已使用', '已完成'].includes(order.status);
-  const openOrderDetail = (order: Order) => setSelectedOrder(order);
+  const openOrderDetail = (order: Order) => {
+    setSelectedFlightTask(null);
+    setSelectedOrder(order);
+  };
 
   const columns: TableProps<Order>['columns'] = [
     { title: '订单号', key: 'orderNo', width: 190, dataIndex: 'orderNo', ellipsis: true },
@@ -80,6 +86,13 @@ export default function OrderListPage() {
 
   // 抽屉按 id 读 store 里的实时订单：重试后状态流转能直接反映，不需要本地打补丁
   const detail = selectedOrder ? orders.find((order) => order.id === selectedOrder.id) ?? selectedOrder : null;
+  const openFlightTask = (task: FlightTask) => {
+    setSelectedFlightTask(task);
+  };
+  const closeOrderDetail = () => {
+    setSelectedOrder(null);
+    setSelectedFlightTask(null);
+  };
 
   return (
     <div className="admin-page order-list-page">
@@ -91,9 +104,10 @@ export default function OrderListPage() {
         {summaryExpanded ? <div className="order-summary-body"><div className="order-summary-stat order-summary-stat-primary"><Statistic title="订单总数" value={summaryOrders.length} /></div><div className="order-summary-stat"><Statistic title="已完成单数" value={summaryOrders.filter((order) => order.status === '已完成').length} valueStyle={{ color: '#52c41a' }} /></div><div className="order-summary-stat"><Statistic title="已取消单数" value={summaryOrders.filter((order) => order.status === '已取消').length} valueStyle={{ color: '#fa8c16' }} /></div><div className="order-summary-stat"><Statistic title="已退款单数" value={summaryOrders.filter((order) => order.status === '已退款').length} valueStyle={{ color: '#ff4d4f' }} /></div><div className="order-summary-divider" /><div className="order-summary-stat order-summary-money"><Statistic title="月度净流水(元)" value={Math.max(0, paidAmount - refundAmount)} precision={2} prefix="￥" /></div><span className="order-summary-equals">=</span><div className="order-summary-stat order-summary-money"><Statistic title="总支付金额(元)" value={paidAmount} precision={2} prefix="￥" /></div><span className="order-summary-equals">-</span><div className="order-summary-stat order-summary-money"><Statistic title="总退款金额(元)" value={refundAmount} precision={2} prefix="￥" valueStyle={{ color: '#ff4d4f' }} /></div></div> : null}
       </section>
       <section className="white-card order-table-card"><div className="order-table-toolbar order-reference-toolbar"><Tabs activeKey={activeStatus} onChange={(key) => setActiveStatus(key as OrderTab)} items={ORDER_STATUS_TABS.map((status) => ({ key: status, label: `${status || '全部订单'} ${statusCounts(status)}` }))} /><Input allowClear prefix={<SearchOutlined />} placeholder="查询订单号、手机号、主题" value={keyword} onChange={(event) => setKeyword(event.target.value)} /></div><Table className="order-list-table" rowKey="id" columns={columns} dataSource={filteredOrders} scroll={{ x: 1900 }} pagination={{ pageSize: 10, showSizeChanger: false, showTotal: (total) => `共 ${total} 条` }} locale={{ emptyText: '暂无订单数据' }} /></section>
-      <Drawer className="order-detail-drawer" title="订单详情" open={Boolean(detail)} onClose={() => setSelectedOrder(null)} width={800} destroyOnClose footer={detail ? <div className="order-drawer-footer"><Button type="primary" danger disabled={!canRefund(detail)} onClick={() => message.info('退款流程属订单售后模块，本演示仅保留入口')}>退款</Button></div> : null}>
-        {detail ? <OrderDetailSections order={detail} /> : null}
+      <Drawer className="order-detail-drawer" title="订单详情" open={Boolean(detail)} onClose={closeOrderDetail} width={800} destroyOnClose footer={detail ? <div className="order-drawer-footer"><Button type="primary" danger disabled={!canRefund(detail)} onClick={() => message.info('退款流程属订单售后模块，本演示仅保留入口')}>退款</Button></div> : null}>
+        {detail ? <OrderDetailSections order={detail} onOpenFlightTask={openFlightTask} /> : null}
       </Drawer>
+      <FlightTaskDetailDrawer task={selectedFlightTask} open={Boolean(selectedFlightTask)} onClose={() => setSelectedFlightTask(null)} />
     </div>
   );
 }

@@ -20,6 +20,7 @@ import type {
   SettlementRow,
   SettlementRowStatus,
   SplitMode,
+  SplitTransaction,
   TenantMember,
   TenantRole,
 } from './types';
@@ -356,6 +357,13 @@ export function promotionRateTotalForPoint(point: string, promotions: PromotionP
     }, 0);
 }
 
+/** 同一订单最多命中一个推广方；单点容量校验取可同时生效的最高推广比例。 */
+export function promotionRateMaxForPoint(point: string, promotions: PromotionPartner[]): number {
+  return roundAmount(Math.max(0, ...(promotions || [])
+    .filter(promotionParticipatesInShare)
+    .map((partner) => Number((partner.rules || []).find((item) => item.point === point)?.rate || 0))));
+}
+
 export function promotionBusinessAccounts(promotions: PromotionPartner[]): BusinessAccount[] {
   return (promotions || []).map(partner => ({
     id: partner.id,
@@ -496,7 +504,7 @@ export function channelRateTotalForPoint(point: string, members: TenantMember[],
     const rule = matchedChannelRule(account.config || defaultChannelConfig(), point);
     return sum + Number(rule ? rule.rate || 0 : 0);
   }, 0);
-  return roundAmount(channelTotal + promotionRateTotalForPoint(point, promotions));
+  return roundAmount(channelTotal + promotionRateMaxForPoint(point, promotions));
 }
 
 export interface PointCapacityState {
@@ -505,14 +513,14 @@ export interface PointCapacityState {
   counterparty: number;     // 收款商户自留比例
   premium: number;          // 溢价比例
   sideTotal: number;        // 商家侧小计 = 保留 + 分给 + 自留 + 溢价
-  externalTotal: number;    // 渠道/推广合计（含草稿自身行）
+  externalTotal: number;    // 渠道合计 + 可命中的最高推广方比例
   total: number;            // sideTotal + externalTotal（单点分成合计）
   capacity: number;         // 渠道/推广可分配上限 = 100 - sideTotal
   remaining: number;        // max(0, capacity - externalTotal)
   over: number;             // max(0, total - 100)
 }
 
-/** 单点商家侧 + 渠道/推广合计容量快照（实时校验口径：三比例 + 渠道/推广 ≤ 100%） */
+/** 单点容量校验：商家侧 + 渠道合计 + 单订单可能命中的最高推广方比例 ≤ 100%。 */
 export function merchantPointCapacityState(config: MerchantConfig, point: string, externalTotal = 0): PointCapacityState {
   const retention = merchantRetentionRatio(config);
   const ratio = merchantEffectiveBaseRatio(config, point);
@@ -542,7 +550,7 @@ export function pointCapacityText(s: PointCapacityState): string {
     return `该点分成合计 ${roundAmount(s.total)}%，已超 100%（超 ${roundAmount(s.over)}%）`;
   }
   if (s.externalTotal > 0) {
-    return `剩余可分配 ${roundAmount(s.remaining)}%（渠道/推广已占 ${roundAmount(s.externalTotal)}%）`;
+    return `剩余可分配 ${roundAmount(s.remaining)}%（渠道及最高推广方已占 ${roundAmount(s.externalTotal)}%）`;
   }
   return '';
 }
@@ -566,8 +574,8 @@ export function merchantPointRuleContext(
 }
 
 /**
- * 单点自动溢价（只读口径）：在收款商户自留、分给[景区商家|自营平台]、渠道/推广之后，
- * 剩余部分自动计入溢价并归收款商户；合计超 100% 时溢价为 0 并置 over。
+ * 单点最低溢价（只读口径）：按渠道与最高推广方比例预估。
+ * 订单实际溢价需以订单实际归因的推广方比例重算。
  */
 export function merchantPointAutoPremium(
   config: MerchantConfig,
@@ -602,7 +610,7 @@ export function channelPointContextText(
 
 interface ChannelRemainState { remaining: number; over: number; total: number; }
 
-/** 渠道行选中拍摄点后的实时「剩余可分」数值（含本行草稿后的口径），页面据此展示剩余可分提示 */
+/** 渠道行选中拍摄点后的实时「剩余可分」数值：渠道合计 + 最高推广方比例。 */
 export function channelPointRemainState(
   point: string,
   options: { members: TenantMember[]; promotions: PromotionPartner[]; draftChannelConfig?: ChannelConfig | null; currentMemberId?: string }
@@ -612,7 +620,7 @@ export function channelPointRemainState(
   const config = merchant && merchant.config && merchant.config.type === 'merchant' ? merchant.config : defaultMerchantConfig();
   const savedChannelTotal = savedChannelRateTotalForPoint(point, options.members, options.currentMemberId || '');
   const draftChannelTotal = channelDraftRateTotalForPoint(options.draftChannelConfig || null, point);
-  const promotionTotal = promotionRateTotalForPoint(point, options.promotions);
+  const promotionTotal = promotionRateMaxForPoint(point, options.promotions);
   const used = roundAmount(savedChannelTotal + draftChannelTotal + promotionTotal);
   const state = merchantPointCapacityState(config, point, used);
   return { remaining: state.remaining, over: state.over, total: state.total };
@@ -625,7 +633,7 @@ export function channelPointRemainState(
 export function memberConfigSaveSummary(config: AccountConfig): string {
   if (!config) return '';
   const cycle = config.pendingSettlementCycle || config.settlementCycle;
-  const cycleText = cycle === 'weekly' ? '周结' : cycle === 'monthly' ? '月结' : '未配置周期';
+  const cycleText = cycle === 'weekly' ? '周结' : cycle === 'monthly' ? '月结' : cycle === 't1' ? 'T+1' : '未配置周期';
   if (config.type === 'channel') {
     const rules = normalizeMemberChannelRules(config.channelRules);
     const total = rules.reduce((sum, rule) => sum + Number(rule.rate || 0), 0);
@@ -719,7 +727,7 @@ function channelShareOverflow(options: {
       const rule = matchedChannelRule(channel.config || defaultChannelConfig(), scenicName);
       return sum + (rule ? Number(rule.rate || 0) : 0);
     }, 0);
-    const promotionTotal = promotionRateTotalForPoint(scenicName, options.promotions);
+    const promotionTotal = promotionRateMaxForPoint(scenicName, options.promotions);
     const total = roundAmount(channelTotal + promotionTotal);
     const state = merchantPointCapacityState(merchantConfig, scenicName, total);
     if (state.over > 0) {
@@ -747,14 +755,14 @@ function channelShareOverflow(options: {
 export function channelShareOverflowMessage(overflow: Overflow | null): string {
   if (!overflow) return '';
   const scopeText = overflow.scenicName || '当前拍摄点';
-  return `「${scopeText}」渠道/推广分成合计 ${roundAmount(overflow.total)}%，已超过剩余可分配 ${roundAmount(overflow.capacity)}%。请调低渠道/推广分成比例。`;
+  return `「${scopeText}」渠道与最高推广方分成合计 ${roundAmount(overflow.total)}%，已超过剩余可分配 ${roundAmount(overflow.capacity)}%。请调低渠道或推广方分成比例。`;
 }
 
 export function merchantShareOverflowMessage(overflow: Overflow | null): string {
   if (!overflow) return '';
   const scopeText = overflow.scenicName || '当前拍摄点';
   const full = roundAmount(overflow.sideTotal + overflow.total);
-  return `「${scopeText}」分成合计 ${full}%，超 100%。已配：${overflow.counterpartyLabel} ${overflow.counterpartyRatio}%、${overflow.ratioLabel} ${overflow.ratio}%、渠道/推广 ${overflow.total}%。请调低相关比例后再保存。`;
+  return `「${scopeText}」分成合计 ${full}%，超 100%。已配：${overflow.counterpartyLabel} ${overflow.counterpartyRatio}%、${overflow.ratioLabel} ${overflow.ratio}%、渠道及最高推广方 ${overflow.total}%。请调低相关比例后再保存。`;
 }
 
 export interface ConfigValidation {
@@ -773,7 +781,7 @@ export function validateMemberConfig(
   let strongWarn: string | null = null;
   const member = currentMemberId ? members.find(item => item.id === currentMemberId) || null : null;
   if (!config) return { error: null, strongWarn };
-  if (!config.settlementCycle && !config.pendingSettlementCycle) {
+  if (isSplitSettlementMode(config.splitMode) && !config.settlementCycle && !config.pendingSettlementCycle) {
     return { error: '请选择结算周期', strongWarn };
   }
   if (config.type === 'merchant') {
@@ -868,12 +876,12 @@ export interface PromotionValidation {
   errors: string[];
 }
 
-function otherPromotionRate(point: string, currentPromotionId: string, promotions: PromotionPartner[]): number {
+function otherPromotionRateMax(point: string, currentPromotionId: string, promotions: PromotionPartner[]): number {
   return (promotions || [])
     .filter(partner => partner.id !== currentPromotionId && promotionParticipatesInShare(partner))
-    .reduce((sum, partner) => {
+    .reduce((max, partner) => {
       const rule = (partner.rules || []).find(item => item.point === point);
-      return sum + Number(rule ? rule.rate || 0 : 0);
+      return Math.max(max, Number(rule ? rule.rate || 0 : 0));
     }, 0);
 }
 
@@ -881,8 +889,8 @@ export interface PromotionPointContext {
   pointRule: PointShareRule | null;
   state: PointCapacityState;   // 该点容量快照（商家侧 + 渠道/推广合计），口径同拍摄点/渠道行
   channelTotal: number;
-  promotionTotal: number;
-  draftPromotionTotal: number;
+  promotionTotal: number;      // 其他推广方中的最高比例
+  draftPromotionTotal: number; // 当前推广方在该点的比例
 }
 
 export function promotionContextForPoint(
@@ -900,14 +908,14 @@ export function promotionContextForPoint(
     if (rule.point !== point) return sum;
     return sum + Number(rule.rate || 0);
   }, 0);
-  const promotionTotal = otherPromotionRate(point, currentPromotionId, promotions);
+  const promotionTotal = otherPromotionRateMax(point, currentPromotionId, promotions);
   const draftPromotionTotal = Array.isArray(draftRules)
     ? draftRules.reduce((sum, rule) => {
       if (!rule || rule.point !== point || !Number.isFinite(rule.rate)) return sum;
       return sum + Number(rule.rate || 0);
     }, 0)
     : 0;
-  const external = roundAmount(channelTotal + promotionTotal + draftPromotionTotal);
+  const external = roundAmount(channelTotal + Math.max(promotionTotal, draftPromotionTotal));
   const state = merchantPointCapacityState(merchantConfig, point, external);
   return {
     pointRule,
@@ -1014,6 +1022,7 @@ export interface OrderSeed extends Record<string, unknown> {
   refundAmount?: number;
   splitSkipReason?: string;
   fundingFailReason?: string;
+  splitTransactions?: SplitTransaction[];
   ruleVersion?: string;
   createdAt: string;
   completedAt?: string;
@@ -1289,6 +1298,7 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
   const isAutoSplit = isOrderSplit;
   const collectionMode: CollectionMode = seed.collectionMode || config.collectionMode || 'platform';
   const paidAmount = roundAmount(seed.paidAmount ?? seed.amount);
+  const paidAt = String(seed.paidAt || seed.createdAt || '');
   const refundAmount = roundAmount(seed.refundAmount ?? (seed.status === '已退款' ? paidAmount : 0));
   const feeRate = settlementFeeRateForMode();
   const feeAmount = settlementFeeAmount(0);
@@ -1302,12 +1312,22 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
   let reversalStatus = isOrderSplit && seed.status === '已退款' && splitStatus === '已分账' ? '已回退' : '';
   if (isOrderSplit && seed.splitStatus !== undefined) splitStatus = seed.splitStatus;
   if (isOrderSplit && seed.reversalStatus !== undefined) reversalStatus = seed.reversalStatus;
+  const splitTransactions = isOrderSplit && Array.isArray(seed.splitTransactions)
+    ? seed.splitTransactions.map((item) => ({ ...item }))
+    : [];
+  if (splitTransactions.length > 1) {
+    const failedCount = splitTransactions.filter((item) => item.status === '分账失败').length;
+    const succeededCount = splitTransactions.filter((item) => item.status === '已分账').length;
+    splitStatus = failedCount > 0
+      ? (succeededCount > 0 ? '部分分账失败' : '分账失败')
+      : (splitTransactions.every((item) => item.status === '已分账') ? '已分账' : '待分账');
+  }
   const settlementEligible = seed.settlementEligible !== undefined
     ? Boolean(seed.settlementEligible)
     : isOrderSplit
       ? paidAmount > 0 && !['待付款', '已取消'].includes(seed.status) && !(seed.status === '已退款' && !splitStatus && !reversalStatus)
       : ['已使用', '已完成', '已退款'].includes(seed.status);
-  const settlementEligibleAt = seed.settlementEligibleAt || seed.completedAt || seed.createdAt;
+  const settlementEligibleAt = seed.settlementEligibleAt || seed.completedAt || paidAt;
   const hasSplitRecord = isOrderSplit && Boolean(splitStatus || reversalStatus);
   const shareBaseAmount = isOrderSplit
     ? (seed.status === '已退款' && !hasSplitRecord ? 0 : originalSplitBase)
@@ -1404,7 +1424,7 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
   });
   const flowLogs = [
     { time: seed.createdAt.replace(/:\d\d$/, ':04'), title: '用户下单，未支付' },
-    { time: seed.createdAt, title: '支付成功，生成订单资金快照' },
+    { time: paidAt, title: '支付成功，生成订单资金快照' },
     { time: seed.completedAt || seed.createdAt, title: seed.completedAt ? '拍摄流程完成，作品生成' : '等待履约或使用' }
   ];
   const built = {
@@ -1420,8 +1440,9 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
     reversalStatus,
     fundingResult,
     splitSkipReason,
-    fundingFailReason: seed.fundingFailReason || '',
-    splitNo: isOrderSplit && ['已分账', '分账失败'].includes(splitStatus || '') ? `HFSPLIT${String(seed.id).slice(-10)}` : '',
+    fundingFailReason: seed.fundingFailReason || splitTransactions.find((item) => item.status === '分账失败')?.failureReason || '',
+    splitNo: splitTransactions.length > 1 ? '' : (isOrderSplit && ['已分账', '分账失败'].includes(splitStatus || '') ? `HFSPLIT${String(seed.id).slice(-10)}` : ''),
+    splitTransactions,
     reversalNo: isOrderSplit && reversalStatus ? `HFREV${String(seed.id).slice(-10)}` : '',
     splitAmount,
     provider: 'huifu',
@@ -1437,7 +1458,8 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
     shareBaseAmount,
     settlementEligible,
     settlementEligibleAt,
-    businessDate: seed.businessDate as string || String(seed.createdAt || '').slice(0, 10),
+    paidAt,
+    businessDate: seed.businessDate as string || paidAt.slice(0, 10),
     batchId: '',
     splitReceivers,
     settlementMode,
@@ -1451,7 +1473,12 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
       route: seed.orderType === '照片订单' ? '定点环绕航线' : '日落巡航航线',
       clipTemplate: seed.orderType === '照片订单' ? '高光照片模板' : '电影感快剪模板',
       motionDesc: '按主题预设运镜自动执行',
-      peopleCount: seed.orderType === '照片订单' ? '2 人' : '1-4 人'
+      peopleCount: seed.orderType === '照片订单' ? '2 人' : '1-4 人',
+      flightTaskId: `FT${String(seed.id).slice(-12)}`,
+      flightTaskIds: String(seed.id) === '2026100514203800029'
+        ? [`FT${String(seed.id).slice(-12)}`, ...Array.from({ length: 4 }, (_, index) => `FT${String(seed.id).slice(-12)}-${String(index + 2).padStart(2, '0')}`)]
+        : undefined,
+      droneSn: `UAV-${String(seed.id).slice(-8).toUpperCase()}`
     },
     flowLogs,
     channelSnapshot: channelSnapshots[0] || null,
@@ -1508,7 +1535,18 @@ export function orderSeeds(members: TenantMember[], promotions: PromotionPartner
     { id: '2026091811382700027', status: '退款中', orderType: '照片订单', theme: '云栖山高光照片', point: '云栖山观景台', user: '刘女士', phone: '137****2406', amount: 129, collectionMode: 'merchant', splitMode: 'system', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-09-18 11:38:27', completedAt: '' },
     { id: '2026092213081200028', status: '已退款', orderType: '照片订单', theme: '云栖山快照', point: '云栖山南门', user: '许女士', phone: '135****7788', amount: 99, paidAmount: 99, refundAmount: 99, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '', reversalStatus: '', splitSkipReason: '分账前退款', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-09-22 13:08:12', completedAt: '2026-09-22 13:22:10' },
     { id: '2026092413282700030', status: '退款失败', orderType: '照片订单', theme: '云栖山家庭快照', point: '云栖山南门', user: '吴女士', phone: '137****7364', amount: 159, paidAmount: 159, collectionMode: 'merchant', fundingMode: 'order_split', splitStatus: '已分账', reversalStatus: '回退失败', fundingFailReason: '汇付回退金额校验失败', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, createdAt: '2026-09-24 13:28:27', completedAt: '2026-09-24 13:42:16' },
-    { id: '2026100514203800029', status: '已完成', orderType: '套餐订单', theme: '湖畔亲子乐园主题', point: '湖滨亲子乐园', user: '郑先生', phone: '137****6612', amount: 329, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: channelId2, channelName: multiChannelName, createdAt: '2026-10-05 14:20:38', completedAt: '2026-10-05 14:48:06' }
+    { id: '2026093010304500031', status: '已完成', orderType: '套餐订单', theme: '跨月自然周演示订单', point: '云栖山游客中心', user: '方女士', phone: '139****5408', amount: 299, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, createdAt: '2026-09-30 10:30:45', paidAt: '2026-09-30 10:31:08', completedAt: '2026-09-30 10:48:12' },
+    { id: '2026100210151200032', status: '已完成', orderType: '套餐订单', theme: '跨月自然周演示订单', point: '云栖山游客中心', user: '蒋先生', phone: '136****8615', amount: 359, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '待分账', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, createdAt: '2026-10-02 10:15:12', paidAt: '2026-10-02 10:15:36', completedAt: '2026-10-02 10:34:20' },
+    { id: '2026100514203800029', status: '已完成', orderType: '套餐订单', theme: '湖畔亲子乐园主题', point: '湖滨亲子乐园', user: '郑先生', phone: '137****6612', amount: 329, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: channelId2, channelName: multiChannelName, createdAt: '2026-10-05 14:20:38', completedAt: '2026-10-05 14:48:06' },
+    {
+      id: '2026100610362400033', status: '已完成', orderType: '套餐订单', theme: '多笔分账演示订单', point: '云栖山游客中心', user: '孙女士', phone: '136****2288', amount: 399,
+      collectionMode: 'platform', fundingMode: 'order_split', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName,
+      createdAt: '2026-10-06 10:36:24', completedAt: '2026-10-06 10:52:18',
+      splitTransactions: [
+        { id: 'split-2026100610362400033-01', splitNo: 'HFSPLIT61036240033-01', receiverCount: 7, status: '已分账' },
+        { id: 'split-2026100610362400033-02', splitNo: 'HFSPLIT61036240033-02', receiverCount: 2, status: '分账失败', failureReason: '分账接收方状态异常' }
+      ]
+    }
   ];
 }
 
@@ -1565,30 +1603,57 @@ function aggregateOrderSplitStatus(orders: Order[]): SettlementRowStatus {
   return '待分账';
 }
 
-function settlementPeriodMeta(cycleType: SettlementCycleType, offset = 0): {
+type SettlementPeriodMeta = {
   label: string;
   start: string;
   end: string;
-} {
+  autoSplitAt: string;
+};
+
+function settlementPeriodMetaForPayment(cycleType: SettlementCycleType, paidAt: string): SettlementPeriodMeta {
   const pad = (value: number) => String(value).padStart(2, '0');
   const dateText = (date: Date) => `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+  const date = new Date(`${String(paidAt).slice(0, 10)}T00:00:00.000Z`);
   if (cycleType === 'weekly') {
-    const start = new Date(Date.UTC(2026, 4, 18 + offset * 7));
-    const end = new Date(Date.UTC(2026, 4, 25 + offset * 7));
+    const weekDay = (date.getUTCDay() + 6) % 7;
+    const start = new Date(date.getTime() - weekDay * 24 * 60 * 60 * 1000);
+    const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
     const displayEnd = new Date(end.getTime() - 24 * 60 * 60 * 1000);
     return {
       label: `${dateText(start)}～${dateText(displayEnd)}`,
       start: `${dateText(start)} 00:00`,
       end: `${dateText(end)} 00:00`,
+      autoSplitAt: `${dateText(end)} 00:00`,
     };
   }
-  const start = new Date(Date.UTC(2026, 4 + offset, 1));
-  const end = new Date(Date.UTC(2026, 5 + offset, 1));
+  if (cycleType === 't1') {
+    const start = date;
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    return {
+      label: dateText(start),
+      start: `${dateText(start)} 00:00`,
+      end: `${dateText(end)} 00:00`,
+      autoSplitAt: `${dateText(end)} 00:00`,
+    };
+  }
+  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
   return {
     label: `${start.getUTCFullYear()}-${pad(start.getUTCMonth() + 1)}`,
     start: `${dateText(start)} 00:00`,
     end: `${dateText(end)} 00:00`,
+    autoSplitAt: `${dateText(end)} 00:00`,
   };
+}
+
+function settlementPeriodMeta(cycleType: SettlementCycleType, offset = 0): SettlementPeriodMeta {
+  const anchor = cycleType === 'weekly'
+    ? new Date(Date.UTC(2026, 4, 18 + offset * 7))
+    : cycleType === 't1'
+      ? new Date(Date.UTC(2026, 4, 18 + offset))
+      : new Date(Date.UTC(2026, 4 + offset, 1));
+  const dateText = `${anchor.getUTCFullYear()}-${String(anchor.getUTCMonth() + 1).padStart(2, '0')}-${String(anchor.getUTCDate()).padStart(2, '0')}`;
+  return settlementPeriodMetaForPayment(cycleType, dateText);
 }
 
 function historyPeriodOffset(period: string): number {
@@ -1665,6 +1730,7 @@ export function buildSettlementRows(
       period: periodMeta.label,
       periodStart: periodMeta.start,
       periodEnd: periodMeta.end,
+      autoSplitAt: periodMeta.autoSplitAt,
       isEstimated: false,
       businessDate: '',
       fundingMode: row.fundingMode,
@@ -1685,7 +1751,11 @@ export function buildSettlementRows(
     };
   };
 
-  const buildSettlementRow = (account: BusinessAccount, matched: Array<{ order: Order; share: OrderSplitShare }>): SettlementRow | null => {
+  const buildSettlementRow = (
+    account: BusinessAccount,
+    matched: Array<{ order: Order; share: OrderSplitShare }>,
+    periodMeta?: SettlementPeriodMeta,
+  ): SettlementRow | null => {
     const ordersInRow = matched.map(item => item.order);
     if (!ordersInRow.length) return null;
     const income = roundAmount(ordersInRow.reduce((sum, order) => sum + Number(order.paidAmount ?? order.amount ?? 0), 0));
@@ -1714,16 +1784,19 @@ export function buildSettlementRows(
     const status: SettlementRowStatus = fundingMode === 'order_split'
       ? aggregateOrderSplitStatus(ordersInRow)
       : (account.objectType === 'merchant' && hasMerchantDirectOrder ? '出账中' : '待申请');
-    const cycleType = account.settlementCycle || (account.config && account.config.settlementCycle) || 'monthly';
-    const periodMeta = settlementPeriodMeta(cycleType);
+    const cycleType = fundingMode === 'order_split'
+      ? account.settlementCycle || (account.config && account.config.settlementCycle) || 'monthly'
+      : 'monthly';
+    const resolvedPeriodMeta = periodMeta || settlementPeriodMeta(cycleType);
     return {
-      id: `${view}-${account.id}-current`,
+      id: `${view}-${account.id}-${resolvedPeriodMeta.start.slice(0, 10)}`,
       view,
       detailFactor: 1,
-      period: periodMeta.label || currentPeriod,
+      period: resolvedPeriodMeta.label || currentPeriod,
       cycleType,
-      periodStart: periodMeta.start,
-      periodEnd: periodMeta.end,
+      periodStart: resolvedPeriodMeta.start,
+      periodEnd: resolvedPeriodMeta.end,
+      autoSplitAt: resolvedPeriodMeta.autoSplitAt,
       isEstimated: true,
       businessDate: '',
       fundingMode,
@@ -1761,17 +1834,25 @@ export function buildSettlementRows(
       })
       .filter((item): item is { order: Order; share: OrderSplitShare } => Boolean(item));
     if (!matched.length) return;
+    if (method === 'thirdParty') {
+      const cycleType = account.settlementCycle || (account.config && account.config.settlementCycle) || 'monthly';
+      const grouped = new Map<string, { periodMeta: SettlementPeriodMeta; items: Array<{ order: Order; share: OrderSplitShare }> }>();
+      matched.forEach((item) => {
+        const periodMeta = settlementPeriodMetaForPayment(cycleType, item.order.paidAt || item.order.createdAt);
+        const key = periodMeta.start;
+        const group = grouped.get(key) || { periodMeta, items: [] };
+        group.items.push(item);
+        grouped.set(key, group);
+      });
+      grouped.forEach(({ periodMeta, items }) => {
+        const row = buildSettlementRow(account, items, periodMeta);
+        if (row) rows.push(row);
+      });
+      return;
+    }
     const row = buildSettlementRow(account, matched);
     if (row) rows.push(row);
   });
-
-  if (method === 'thirdParty') {
-    const weeklyRow = rows.find(row => row.cycleType === 'weekly');
-    if (weeklyRow) {
-      rows.push(derivedBillRow(weeklyRow, 'weekly-paid-1', '2026-04', '已分账', '无需发票', 0.78));
-      rows.push(derivedBillRow(weeklyRow, 'weekly-paid-2', '2026-03', '已分账', '无需发票', 0.66));
-    }
-  }
 
   if (method === 'system') {
     const merchantRow = rows.find(row => row.objectType === 'merchant');
@@ -1842,7 +1923,7 @@ export function filterBillOrders(bill: SettlementRow, scenic: string): Order[] {
 /** 结算订单计算说明（仅按比例），返回纯文本描述 */
 export function settlementOrderCalculation(order: Order, share: OrderSplitShare | null = null, detailFactor = 1): { rule: string } {
   const ratio = share && (share.configuredRatio === 0 || share.configuredRatio) ? Number(share.configuredRatio) : Number(share && share.ratio || 0);
-  return { rule: `按比例 · ${roundAmount(ratio)}%` };
+  return { rule: `按比例：${roundAmount(ratio)} %` };
 }
 
 export function billOrderDisplay(bill: SettlementRow, order: Order, factor: number): {

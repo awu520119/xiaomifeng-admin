@@ -50,7 +50,7 @@ export default function BillDetailPage() {
   const detailPerspective: DetailPerspective = ['channel', 'merchant', 'promotion'].includes(requestedPerspective || '')
     ? requestedPerspective as DetailPerspective
     : 'self';
-  const backPath = location.pathname.startsWith('/settlement/approval/') || searchParams.get('from') === 'approval' ? '/settlement/approval' : '/settlement';
+  const backPath = '/settlement';
   const canRetrySplit = detailPerspective === 'self';
 
   const openOrderDetail = (order: Order) => {
@@ -112,7 +112,7 @@ export default function BillDetailPage() {
         align: 'center',
         render: (_: unknown, order: Order) => orderStatusTag(order),
       },
-      { title: '下单时间', key: 'createdAt', width: 150, dataIndex: 'createdAt' },
+      { title: '支付时间', key: 'paidAt', width: 150, dataIndex: 'paidAt' },
       { title: '完成时间', key: 'completedAt', width: 150, dataIndex: 'completedAt' },
       {
         title: '订单金额',
@@ -198,7 +198,7 @@ export default function BillDetailPage() {
     return (
       <div className="admin-page">
         <section className="white-card detail-empty">
-          未找到该账单，<a onClick={() => navigate(backPath)}>返回{backPath === '/settlement/approval' ? '结算审批' : '结算中心'}</a>
+          未找到该账单，<a onClick={() => navigate(backPath)}>返回结算中心</a>
         </section>
       </div>
     );
@@ -222,8 +222,8 @@ export default function BillDetailPage() {
           <div className="bill-hero">
             <div className="bill-hero-top">
               <div className="bill-period-heading">
-                <Tag color={row.cycleType === 'weekly' ? 'processing' : 'default'} className="bill-cycle-tag">
-                  {row.cycleType === 'weekly' ? '周结' : '月结'}
+                <Tag color={row.cycleType === 'weekly' ? 'processing' : row.cycleType === 't1' ? 'cyan' : 'default'} className="bill-cycle-tag">
+                  {row.cycleType === 'weekly' ? '周结' : row.cycleType === 't1' ? 'T+1' : '月结'}
                 </Tag>
                 <span className="bill-period">{row.cycleType === 'monthly' ? row.period.replace(/^(\d{4})-(\d{2})$/, '$1年$2月') : row.period}</span>
               </div>
@@ -233,6 +233,12 @@ export default function BillDetailPage() {
               <span className="bill-period-range-label">统计范围</span>
               <span className="bill-period-range-value">{row.periodStart} — {row.periodEnd}</span>
             </div>
+            {isSplit && row.autoSplitAt ? (
+              <div className="bill-period-range-line">
+                <span className="bill-period-range-label">自动分账日</span>
+                <span className="bill-period-range-value">{row.autoSplitAt}</span>
+              </div>
+            ) : null}
             <div className="bill-summary-layout">
               <div className="bill-scope-filter">
                 <span className="metric-label">范围筛选</span>

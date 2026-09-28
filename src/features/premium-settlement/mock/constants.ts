@@ -56,8 +56,9 @@ export const SPLIT_MODE_OPTIONS = [
 ] as const;
 
 export const SETTLEMENT_CYCLE_OPTIONS = [
-  { value: 'weekly', label: '周结', description: '按自然周（周一至周日）生成账期' },
-  { value: 'monthly', label: '月结', description: '按自然月（每月 1 日至月末）统计，次月 20 日出账单' },
+  { value: 'weekly', label: '周结', description: '按自然周汇总，次周自动分账' },
+  { value: 'monthly', label: '月结', description: '按自然月汇总，次月自动分账' },
+  { value: 't1', label: 'T+1', description: '按订单支付日汇总，次日自动分账' },
 ] as const;
 
 // —— 金额工具 ——
@@ -103,6 +104,7 @@ const STATE_COLOR: Record<string, string> = {
   已回退: 'success',
   待回退: 'warning',
   分账失败: 'error',
+  部分分账失败: 'error',
   回退失败: 'error',
   订单分账: 'processing',
   线下对公结算: 'processing',

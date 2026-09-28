@@ -87,9 +87,11 @@ export default function SettlementPage() {
         if (objectType && row.objectType !== objectType) return false;
         if (accountId && row.account.id !== accountId) return false;
       }
-      if (cycleType && row.cycleType !== cycleType) return false;
+      if (view === 'thirdParty' && cycleType && row.cycleType !== cycleType) return false;
       if (periodDate) {
+        if (view === 'offline' && row.period !== periodDate.format('YYYY-MM')) return false;
         if (cycleType === 'monthly' && row.period !== periodDate.format('YYYY-MM')) return false;
+        if (cycleType === 't1' && row.period !== periodDate.format('YYYY-MM-DD')) return false;
         if (cycleType === 'weekly') {
           const monday = periodDate.subtract((periodDate.day() + 6) % 7, 'day').format('YYYY-MM-DD');
           if (!row.periodStart.startsWith(monday)) return false;
@@ -121,7 +123,7 @@ export default function SettlementPage() {
     key: 'cycleType',
     width: 90,
     render: (_: unknown, row: SettlementRow) => (
-      <Tag color={row.cycleType === 'weekly' ? 'processing' : 'default'}>{row.cycleType === 'weekly' ? '周结' : '月结'}</Tag>
+      <Tag color={row.cycleType === 'weekly' ? 'processing' : row.cycleType === 't1' ? 'cyan' : 'default'}>{row.cycleType === 'weekly' ? '周结' : row.cycleType === 't1' ? 'T+1' : '月结'}</Tag>
     ),
   };
 
@@ -417,9 +419,9 @@ export default function SettlementPage() {
                 setView(key as ViewKey);
                 window.sessionStorage.setItem('settlement.activeTab', key);
                 setStatus('');
+                setCycleType('');
+                setPeriodDate(null);
                 if (key === 'promotion') {
-                  setCycleType('');
-                  setPeriodDate(null);
                   setObjectType('');
                   setAccountId('');
                 }
@@ -450,7 +452,7 @@ export default function SettlementPage() {
               <DatePicker allowClear picker="month" placeholder="选择月份" style={{ width: 150 }} value={periodDate} onChange={(value) => setPeriodDate(value)} />
             </>
           ) : null}
-          {view !== 'promotion' ? (
+          {view === 'thirdParty' ? (
             <>
               <Select
                 allowClear
@@ -464,19 +466,21 @@ export default function SettlementPage() {
                 options={[
                   { value: 'weekly', label: '周结' },
                   { value: 'monthly', label: '月结' },
+                  { value: 't1', label: 'T+1' },
                 ]}
               />
               <DatePicker
                 allowClear
-                picker={cycleType === 'weekly' ? 'week' : 'month'}
+                picker={cycleType === 'weekly' ? 'week' : cycleType === 't1' ? 'date' : 'month'}
                 disabled={!cycleType}
-                placeholder={!cycleType ? '先选择周期' : cycleType === 'weekly' ? '选择周' : '选择月份'}
+                placeholder={!cycleType ? '先选择周期' : cycleType === 'weekly' ? '选择周' : cycleType === 't1' ? '选择支付日' : '选择月份'}
                 style={{ width: 150 }}
                 value={periodDate}
                 onChange={(value) => setPeriodDate(value)}
               />
             </>
           ) : null}
+          {view === 'offline' ? <DatePicker allowClear picker="month" placeholder="选择月份" style={{ width: 150 }} value={periodDate} onChange={(value) => setPeriodDate(value)} /> : null}
           {canFilterObject ? (
             <>
               <Select

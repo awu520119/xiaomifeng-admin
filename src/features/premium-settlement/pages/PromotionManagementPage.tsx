@@ -13,7 +13,8 @@ import {
 import { INITIAL_ROLES } from '../mock/data';
 import { pointCapacityText, promotionContextForPoint, roleSummaryText, validatePromotion } from '../mock/engine';
 import { useShare } from '../mock/store';
-import type { ChannelRule, MerchantConfig, PromotionPartner, PromotionRule } from '../mock/types';
+import type { ChannelRule, MerchantConfig, PromotionPartner, PromotionRule, TenantMember } from '../mock/types';
+import { buildPointParticipants, PointParticipantsButton } from './SplitParticipants';
 
 /** 已归属某个景区商家账号的拍摄点集合：仅这些点可作为推广规则的配置对象 */
 const OWNED_SHOOT_POINTS = new Set(Object.values(SHOOT_POINT_COLLECTION_MCHID_MAP).flat());
@@ -537,6 +538,7 @@ export default function PromotionManagementPage() {
           formSubmitted={formSubmitted}
           merchantConfig={merchantConfig}
           savedChannelRules={savedChannelRules}
+          members={members}
           promotions={promotions}
           editingId={editing ? editing.id : ''}
           readOnly={mode === 'audit'}
@@ -587,6 +589,7 @@ export function PromotionForm(props: {
   formSubmitted: boolean;
   merchantConfig: MerchantConfig | undefined;
   savedChannelRules: ChannelRule[];
+  members: TenantMember[];
   promotions: PromotionPartner[];
   editingId: string;
   readOnly?: boolean;
@@ -723,7 +726,7 @@ export function PromotionForm(props: {
         </Field>
 
         <Field label="出账规则">
-          <span className="readonly-box">统一月结，每月 20 日生成上月账单</span>
+          <span className="readonly-box">按月汇总账期，次月 20 日可申请结算</span>
         </Field>
 
         <Field label="分成规则">
@@ -774,20 +777,19 @@ export function PromotionForm(props: {
                           }
                         />
                       </Field>
-                      {!readOnly ? (
-                        <div className="rule-action">
-                          <Button type="link" danger size="small" onClick={() => props.removeRuleRow(index)}>
-                            删除
-                          </Button>
-                        </div>
-                      ) : null}
+                      <div className="rule-action">
+                        <Space size={0}>
+                          <PointParticipantsButton point={row.point} disabled={!row.point} participants={buildPointParticipants({ point: row.point, merchantConfig, members: props.members, promotions: props.promotions, currentPromotionId: props.editingId, draftPromotionRules: rows })} />
+                          {!readOnly ? <Button type="link" danger size="small" onClick={() => props.removeRuleRow(index)}>删除</Button> : null}
+                        </Space>
+                      </div>
                     </div>
                     {row.point ? (
                       <div style={{ marginTop: 2 }}>
                         {dup ? (
                           <span className="context-hint is-danger">同一拍摄点只能配置一条推广规则</span>
                         ) : ctx && ctx.over ? (
-                          <span className="context-hint is-danger">{ctx.overText}</span>
+                          <span className="context-hint is-danger">按最高推广方比例计算，{ctx.overText}</span>
                         ) : ctx ? (
                           <span className="remain-hint">
                             该点剩余可分 <b>{ctx.remaining}%</b>

@@ -13,6 +13,17 @@ const prdArg = process.argv.find((arg) => arg.startsWith('--prd='));
 const prd = prdArg?.slice('--prd='.length);
 /** 注入默认路由的锚点：第一个 module script 之前 */
 const marker = '<script type="module">';
+const staticPageStyle = `<style id="prd-static-layout">
+body.prd-static-page .app-sider { display: none !important; }
+body.prd-static-page .app-workspace { width: 100%; }
+</style>`;
+
+/** PRD 评审文件不带左侧导航，正文保留原页面头部与内容布局。 */
+function withoutSider(source) {
+  return source
+    .replace('<body>', '<body class="prd-static-page">')
+    .replace('</head>', `${staticPageStyle}\n</head>`);
+}
 
 if (!existsSync(join(dist, 'index.html'))) {
   console.error('未找到 dist/index.html，请先执行 npm run build');
@@ -55,26 +66,29 @@ const reviewPages = {
   promotion: { file: 'review-promotion-management.html', hash: '#/promotion' },
   'promotion-create': { file: 'review-promotion-create.html', hash: '#/review/promotion/create' },
   orders: { file: 'review-order-management.html', hash: '#/orders' },
-  'order-split-failure': { file: 'review-order-split-failure.html', hash: '#/review/order/split-failure' },
-  'order-reversal-failure': { file: 'review-order-reversal-failure.html', hash: '#/review/order/reversal-failure' },
+  'order-split-failure': { file: 'review-order-split-failure.html', hash: '#/demo/export/order-split-failure' },
+  'order-reversal-failure': { file: 'review-order-reversal-failure.html', hash: '#/demo/export/order-reversal-failure' },
+  'flight-task-detail': { file: 'review-flight-task-detail.html', hash: '#/demo/export/flight-task-detail' },
   settlement: { file: 'review-settlement-center.html', hash: '#/settlement' },
   'settlement-online-detail': { file: 'review-settlement-online-detail.html', hash: '#/settlement/bill/thirdParty/thirdParty-tm005-weekly-paid-1' },
   'settlement-offline-detail': { file: 'review-settlement-offline-detail.html', hash: '#/settlement/bill/offline/offline-tm003-paying' },
   'settlement-promotion-detail': { file: 'review-settlement-promotion-detail.html', hash: '#/settlement/bill/promotion/promotion-promotion_lake_view-paid' },
-  approval: { file: 'review-settlement-approval.html', hash: '#/settlement/approval' },
-  'approval-merchant-detail': { file: 'review-approval-merchant-detail.html', hash: '#/review/approval/detail-merchant' },
-  'approval-channel-detail': { file: 'review-approval-channel-detail.html', hash: '#/review/approval/detail-channel' },
-  'approval-promotion-detail': { file: 'review-approval-promotion-detail.html', hash: '#/review/approval/detail-promotion' },
+};
+
+const reviewGroups = {
+  'order-detail-drawers': ['order-split-failure', 'order-reversal-failure', 'flight-task-detail'],
 };
 
 if (review) {
   const targets = review === 'all'
     ? Object.values(reviewPages)
+    : reviewGroups[review]
+      ? reviewGroups[review].map((key) => reviewPages[key])
     : reviewPages[review]
       ? [reviewPages[review]]
       : null;
   if (!targets) {
-    console.error(`不支持的评审页：${review}。可用值：all, ${Object.keys(reviewPages).join(', ')}`);
+    console.error(`不支持的评审页：${review}。可用值：all, ${Object.keys(reviewGroups).join(', ')}, ${Object.keys(reviewPages).join(', ')}`);
     process.exit(1);
   }
   for (const target of targets) {
@@ -94,13 +108,17 @@ if (review) {
 const prdDir = join(root, 'docs/premium-settlement');
 const prdPages = {
   '结算管理列表PRD-20260920.md': { hash: '#/settlement' },
-  '结算账期详情PRD-20260920.md': { hash: '#/settlement/bill/offline/offline-tm003-paying' },
-  '结算管理详情-线上自动分账PRD-20260920.md': { hash: '#/settlement/bill/thirdParty/thirdParty-tm005-weekly-paid-1' },
-  '订单分账异常PRD-20260920.md': { hash: '#/review/order/split-failure' },
-  '结算审批列表PRD-20260920.md': { hash: '#/settlement/approval' },
-  '景区商家分成配置PRD-20260920.md': { hash: '#/review/member/merchant' },
-  '渠道分成配置PRD-20260920.md': { hash: '#/review/member/channel' },
-  '推广方分成配置PRD-20260920.md': { hash: '#/review/promotion/create' },
+  '结算账期详情PRD-20260920.md': { hash: '#/settlement/bill/thirdParty/thirdParty-tm003-2026-09-30' },
+  '结算管理详情-线上自动分账PRD-20260920.md': { hash: '#/settlement/bill/thirdParty/thirdParty-tm003-2026-09-14' },
+  '订单分账异常PRD-20260920.md': { hash: '#/demo/export/order-reversal-failure' },
+  '订单详情起飞任务IDPRD-20260928.md': { hash: '#/demo/export/order-flight-tasks' },
+  '起飞任务关联订单号PRD-20260928.md': { hash: '#/demo/export/flight-task-detail' },
+  '景区商家分成配置PRD-20260920.md': { hash: '#/demo/export/member/merchant' },
+  '渠道分成配置PRD-20260920.md': { hash: '#/demo/export/member/channel' },
+  '推广方分成配置PRD-20260920.md': { hash: '#/demo/export/promotion/create' },
+};
+const prdGroups = {
+  'flight-task-details': ['订单详情起飞任务IDPRD-20260928.md', '起飞任务关联订单号PRD-20260928.md'],
 };
 
 const escapeHtml = (text) => text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -112,35 +130,44 @@ function prdTitle(mdName) {
 }
 
 if (prd) {
-  // 双向校验：目录里有未登记的 PRD（忘登记），或登记的文件已改名/删除（留孤儿产物），都直接失败。
-  const mdFiles = (existsSync(prdDir) ? readdirSync(prdDir) : []).filter((name) => /PRD.*\.md$/.test(name));
-  const unregistered = mdFiles.filter((name) => !prdPages[name]);
-  const missing = Object.keys(prdPages).filter((name) => !existsSync(join(prdDir, name)));
-  if (unregistered.length || missing.length) {
-    if (unregistered.length) console.error(`以下 PRD 尚未登记落地页，请补充 prdPages 映射：${unregistered.join('、')}`);
-    if (missing.length) console.error(`prdPages 中登记的 PRD 文件不存在（已改名或删除？）：${missing.join('、')}`);
-    process.exit(1);
-  }
   const prdKey = prd.endsWith('.md') ? prd : `${prd}.md`;
   const targets = prd === 'all'
     ? Object.entries(prdPages)
+    : prdGroups[prd]
+      ? prdGroups[prd].map((name) => [name, prdPages[name]])
     : prdPages[prdKey]
       ? [[prdKey, prdPages[prdKey]]]
       : null;
   if (!targets) {
-    console.error(`不支持的 PRD 页：${prd}。可用值：all, ${Object.keys(prdPages).join('、')}`);
+    console.error(`不支持的 PRD 页：${prd}。可用值：all, ${Object.keys(prdGroups).join('、')}, ${Object.keys(prdPages).join('、')}`);
     process.exit(1);
+  }
+  const missingTargets = targets.filter(([name]) => !existsSync(join(prdDir, name))).map(([name]) => name);
+  if (missingTargets.length) {
+    console.error(`以下 PRD 文件不存在：${missingTargets.join('、')}`);
+    process.exit(1);
+  }
+  if (prd === 'all') {
+    // 全量导出时双向校验，避免目录中的 PRD 漏登记，或映射留下已删除文件。
+    const mdFiles = (existsSync(prdDir) ? readdirSync(prdDir) : []).filter((name) => /PRD.*\.md$/.test(name));
+    const unregistered = mdFiles.filter((name) => !prdPages[name]);
+    const missingMappings = Object.keys(prdPages).filter((name) => !existsSync(join(prdDir, name)));
+    if (unregistered.length || missingMappings.length) {
+      if (unregistered.length) console.error(`以下 PRD 尚未登记落地页，请补充 prdPages 映射：${unregistered.join('、')}`);
+      if (missingMappings.length) console.error(`prdPages 中登记的 PRD 文件不存在（已改名或删除？）：${missingMappings.join('、')}`);
+      process.exit(1);
+    }
   }
   for (const [mdName, target] of targets) {
     // 每页两个差异：标签页标题、hash 为空时的落地页。都在副本上改，替换值用函数形式避免 $& 被当反向引用。
     const title = prdTitle(mdName);
     const titleTag = `<title>${title}</title>`;
     const hashScript = `<script>if(!location.hash)location.hash='${target.hash}';</script>\n`;
-    const prdHtml = html
+    const prdHtml = withoutSider(html)
       .replace(/<title>[\s\S]*?<\/title>/, () => titleTag)
       .replace(marker, () => `${hashScript}${marker}`);
     // 写盘前自检：构建产物结构变了（找不到 <title> 或 module script）会导致注入静默失效，产出一堆落到兜底路由的页。
-    if (!prdHtml.includes(titleTag) || !prdHtml.includes(hashScript)) {
+    if (!prdHtml.includes(titleTag) || !prdHtml.includes(hashScript) || !prdHtml.includes('prd-static-page')) {
       console.error(`注入失败：dist/index.html 的结构可能已变化（缺少 <title> 或 <script type="module">），请检查本脚本的替换目标。`);
       process.exit(1);
     }

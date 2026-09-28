@@ -28,7 +28,7 @@ export const INITIAL_MEMBERS: TenantMember[] = [
       type: 'merchant',
       scenicName: '小蜜蜂自营空间',
       collectionMode: 'platform',
-      splitMode: 'system',
+      splitMode: 'thirdParty',
       baseShareRatio: 100,
       retentionRatio: 0,
       pointShareConfigs: [
@@ -42,9 +42,7 @@ export const INITIAL_MEMBERS: TenantMember[] = [
       receiverMchName: '商家分账接收方',
       splitEligibility: 'eligible',
       platformReceiverMchid: 'hf_platform_recv_001',
-      settlementCycle: 'monthly',
-      pendingSettlementCycle: 'weekly',
-      pendingCycleEffectiveAt: '2026-10-01 00:00',
+      settlementCycle: 't1',
       bankOwner: '小蜜蜂自营业务部',
       bankName: '中国银行杭州高新支行',
       bankAccount: '6222********7612',
@@ -68,7 +66,7 @@ export const INITIAL_MEMBERS: TenantMember[] = [
       channelType: '渠道方',
       customChannelType: '',
       channelFundingPayer: 'platform',
-      splitMode: 'system',
+      splitMode: 'thirdParty',
       receiverMchid: 'hf_channel_recv_001',
       receiverMchName: '渠道分账接收方',
       splitEligibility: 'eligible',
@@ -100,7 +98,7 @@ export const INITIAL_MEMBERS: TenantMember[] = [
       channelType: '招商方',
       customChannelType: '',
       channelFundingPayer: 'platform',
-      splitMode: 'system',
+      splitMode: 'thirdParty',
       receiverMchid: 'hf_channel_recv_001',
       receiverMchName: '渠道分账接收方',
       splitEligibility: 'eligible',
@@ -109,7 +107,9 @@ export const INITIAL_MEMBERS: TenantMember[] = [
       bankName: '招商银行杭州滨江支行',
       bankAccount: '6214********6688',
       bankBranch: '杭州滨江支行',
-      channelRules: []
+      channelRules: [
+        { id: 'cr_monthly_lake', point: '湖滨亲子乐园', rate: 4 }
+      ]
     }
   },
   { id: 'tm004', account: 'self_finance', name: '自营财务', phone: '13677112200', roleIds: ['tr_finance'], scopeType: 'all', scopeId: '', scopeName: '全部自营后台', status: 'enabled', registeredAt: '2026-06-22 09:40', lastLogin: '2026-06-29 14:06' }

@@ -9,8 +9,10 @@
     "build": "tsc --noEmit && vite build",
     "share": "npm run build && node scripts/inline-share.mjs",
     "review:members": "npm run build && node scripts/inline-share.mjs --review=members",
+    "review:order-drawers": "npm run build && node scripts/inline-share.mjs --review=order-detail-drawers",
     "review:all": "npm run build && node scripts/inline-share.mjs --review=all",
     "prd:all": "npm run build && node scripts/inline-share.mjs --prd=all",
+    "prd:flight-task-details": "npm run build && node scripts/inline-share.mjs --prd=flight-task-details",
     "preview": "vite preview"
   },
   "dependencies": {

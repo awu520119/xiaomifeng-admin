@@ -8,7 +8,7 @@ export type FundingMode = 'order_split' | 'offline_settlement';
 export type ObjectType = 'merchant' | 'channel' | 'promotion';
 export type AuditStatus = 'approved' | 'pending' | 'rejected';
 export type RoleId = 'tr_admin' | 'tr_scenic_ops' | 'tr_channel' | 'tr_promotion' | 'tr_finance' | 'tr_store_ops';
-export type SettlementCycleType = 'weekly' | 'monthly';
+export type SettlementCycleType = 'weekly' | 'monthly' | 't1';
 export type SplitEligibility = 'eligible' | 'ineligible' | 'unsynced';
 
 export interface TenantRole {
@@ -118,16 +118,25 @@ export interface Order {
   channelAccountId: string; channelAccountIds: string[];
   settlementEligible: boolean; settlementEligibleAt?: string;
   splitStatus?: string; reversalStatus?: string; splitNo?: string; reversalNo?: string;
+  /** 单次支付超过 7 个分账方时拆出的分账流水；仅多笔时在订单详情展开明细。 */
+  splitTransactions?: SplitTransaction[];
   fundingFailReason?: string;
   rating?: number;
   paymentWay?: string; transactionId?: string; payer?: string; receiverSummary?: string; payerMchid?: string;
-  shootInfo?: { themeName?: string; scenicName?: string; shootPoint?: string; route?: string; clipTemplate?: string; motionDesc?: string; peopleCount?: string };
+  shootInfo?: { themeName?: string; scenicName?: string; shootPoint?: string; route?: string; clipTemplate?: string; motionDesc?: string; peopleCount?: string; flightTaskId?: string; flightTaskIds?: string[]; droneSn?: string };
   flowLogs?: Array<{ time: string; title: string }>;
   businessDate: string;
-  createdAt: string; completedAt: string;
+  createdAt: string; paidAt: string; completedAt: string;
   splitReceivers?: SplitReceiver[]; channelSnapshots?: OrderChannelSnapshot[];
   settlementShares?: OrderSplitShare[]; settlementMode?: string; splitScheme?: any;
   orderStatus?: string;                                     // 状态列等展示用派生
+}
+export interface SplitTransaction {
+  id: string;
+  splitNo: string;
+  receiverCount: number;
+  status: '待分账' | '已分账' | '分账失败';
+  failureReason?: string;
 }
 export interface SplitReceiver {
   party: string; accountId: string; objectType: ObjectType; name: string;
@@ -150,7 +159,7 @@ export type SettlementRowStatus =
 export interface SettlementRow {
   id: string; view: 'offline' | 'thirdParty' | 'promotion';
   period: string; businessDate: string; fundingMode: FundingMode;
-  cycleType: SettlementCycleType; periodStart: string; periodEnd: string; isEstimated: boolean;
+  cycleType: SettlementCycleType; periodStart: string; periodEnd: string; autoSplitAt?: string; isEstimated: boolean;
   account: { id: string; account: string; name: string; phone?: string; accountSource?: string; objectType: ObjectType };
   objectType: ObjectType; accountSource: 'B' | 'C';
   scenicText: string; scenicNames: string[];
