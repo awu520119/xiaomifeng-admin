@@ -1013,6 +1013,8 @@ export interface OrderSeed extends Record<string, unknown> {
   fundingMode?: FundingMode;
   splitStatus?: string;
   reversalStatus?: string;
+  splitAt?: string;
+  reversalAt?: string;
   accountId?: string;
   accountName?: string;
   channelAccountId?: string;
@@ -1020,6 +1022,7 @@ export interface OrderSeed extends Record<string, unknown> {
   channelName?: string;
   paidAmount?: number;
   refundAmount?: number;
+  refundAt?: string;
   splitSkipReason?: string;
   fundingFailReason?: string;
   splitTransactions?: SplitTransaction[];
@@ -1317,9 +1320,8 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
     : [];
   if (splitTransactions.length > 1) {
     const failedCount = splitTransactions.filter((item) => item.status === '分账失败').length;
-    const succeededCount = splitTransactions.filter((item) => item.status === '已分账').length;
     splitStatus = failedCount > 0
-      ? (succeededCount > 0 ? '部分分账失败' : '分账失败')
+      ? '分账失败'
       : (splitTransactions.every((item) => item.status === '已分账') ? '已分账' : '待分账');
   }
   const settlementEligible = seed.settlementEligible !== undefined
@@ -1328,6 +1330,8 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
       ? paidAmount > 0 && !['待付款', '已取消'].includes(seed.status) && !(seed.status === '已退款' && !splitStatus && !reversalStatus)
       : ['已使用', '已完成', '已退款'].includes(seed.status);
   const settlementEligibleAt = seed.settlementEligibleAt || seed.completedAt || paidAt;
+  const splitAt = seed.splitAt || (splitStatus && splitStatus !== '待分账' ? settlementEligibleAt : '');
+  const reversalAt = seed.reversalAt || (reversalStatus && reversalStatus !== '待回退' ? seed.refundAt || settlementEligibleAt : '');
   const hasSplitRecord = isOrderSplit && Boolean(splitStatus || reversalStatus);
   const shareBaseAmount = isOrderSplit
     ? (seed.status === '已退款' && !hasSplitRecord ? 0 : originalSplitBase)
@@ -1444,6 +1448,8 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
     splitNo: splitTransactions.length > 1 ? '' : (isOrderSplit && ['已分账', '分账失败'].includes(splitStatus || '') ? `HFSPLIT${String(seed.id).slice(-10)}` : ''),
     splitTransactions,
     reversalNo: isOrderSplit && reversalStatus ? `HFREV${String(seed.id).slice(-10)}` : '',
+    splitAt,
+    reversalAt,
     splitAmount,
     provider: 'huifu',
     payerMchid: collectionMode === 'merchant' ? (config.merchantMch || HF_MERCHANT_COLLECT_ID) : PLATFORM_HUIFU_ACCOUNT_ID,
@@ -1459,6 +1465,7 @@ export function createTenantOrder(seed: OrderSeed, merchant: BusinessAccount | n
     settlementEligible,
     settlementEligibleAt,
     paidAt,
+    refundAt: seed.refundAt || '',
     businessDate: seed.businessDate as string || paidAt.slice(0, 10),
     batchId: '',
     splitReceivers,
@@ -1528,6 +1535,9 @@ export function orderSeeds(members: TenantMember[], promotions: PromotionPartner
     { id: '2026090110162000020', status: '待付款', orderType: '套餐订单', theme: '云栖山晨雾旅拍', point: '云栖山游客中心', user: '王女士', phone: '191****2821', amount: 299, collectionMode: 'platform', fundingMode: 'order_split', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-09-01 10:16:20', completedAt: '' },
     { id: '2026090314251800021', status: '待使用', orderType: '套餐订单', theme: '云栖山亲子旅拍', point: '云栖山北门', user: '张先生', phone: '191****7605', amount: 399, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '待分账', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-09-03 14:25:18', completedAt: '' },
     { id: '2026090817535900022', status: '已使用', orderType: '套餐订单', theme: '云栖山家庭快照', point: '云栖山南门', user: '赵女士', phone: '136****0859', amount: 159, collectionMode: 'merchant', splitMode: 'system', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-09-08 17:53:59', completedAt: '2026-09-08 18:12:08' },
+    // 8 月已完成分账、9 月完成退款：用于演示退款发生账期生成负数调账明细，8 月历史分账不回写。
+    { id: '2026082810304500018', status: '已退款', orderType: '套餐订单', theme: '山间巡游套餐', point: '湖滨亲子乐园', user: '郑女士', phone: '138****8812', amount: 299, paidAmount: 299, refundAmount: 299, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', reversalStatus: '已回退', accountId: merchantId, accountName: merchantName, channelAccountId: channelId2, channelName: multiChannelName, createdAt: '2026-08-28 10:30:45', paidAt: '2026-08-28 10:31:12', splitAt: '2026-08-28 10:33:28', refundAt: '2026-09-18 14:26:18', reversalAt: '2026-09-18 14:26:18', completedAt: '2026-08-28 10:48:36' },
+    { id: '2026091211263000034', status: '已完成', orderType: '套餐订单', theme: '湖滨亲子乐园主题', point: '湖滨亲子乐园', user: '陈女士', phone: '139****5278', amount: 329, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: channelId2, channelName: multiChannelName, createdAt: '2026-09-12 11:26:30', paidAt: '2026-09-12 11:27:04', splitAt: '2026-09-12 11:28:16', completedAt: '2026-09-12 11:46:21' },
     { id: '2026090915434900023', status: '已完成', orderType: '套餐订单', theme: '日落环山巡航', point: '云栖山观景台', user: '李先生', phone: '153****7096', amount: 499, rating: 5, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '已分账', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, createdAt: '2026-09-09 15:43:49', completedAt: '2026-09-09 16:21:08' },
     { id: '2026091111502400024', status: '已取消', orderType: '套餐订单', theme: '模拟盒子主题01', point: '云栖山南门', user: '陈女士', phone: '153****7096', amount: 59, collectionMode: 'platform', fundingMode: 'order_split', accountId: merchantId, accountName: merchantName, channelAccountId: '', channelName: '', createdAt: '2026-09-11 11:50:24', completedAt: '' },
     { id: '2026091410423200025', status: '已完成', orderType: '套餐订单', theme: '曲径通幽测试 08', point: '云栖山观景台', user: '吴先生', phone: '191****7605', amount: 399, collectionMode: 'platform', fundingMode: 'order_split', splitStatus: '分账失败', fundingFailReason: '线上自动分账接收方状态异常', accountId: merchantId, accountName: merchantName, channelAccountId: channelId, channelName, createdAt: '2026-09-14 10:42:32', completedAt: '2026-09-14 11:06:15' },
@@ -1576,6 +1586,59 @@ function settlementShareForAccount(order: Order, account: ShareAccountRef): Orde
 function settlementObjectAmount(order: Order, account: ShareAccountRef): number {
   const share = settlementShareForAccount(order, account);
   return share ? Number(share.amount || 0) : 0;
+}
+
+function isCrossPeriodRefundAdjustment(order: Order): boolean {
+  return order.settlementAdjustment?.type === 'cross_period_refund';
+}
+
+function crossPeriodRefundAdjustment(order: Order, cycleType: SettlementCycleType): Order | null {
+  if (order.reversalStatus !== '已回退' || !order.refundAt) return null;
+  const originalPeriod = settlementPeriodMetaForPayment(cycleType, order.paidAt || order.createdAt);
+  const refundPeriod = settlementPeriodMetaForPayment(cycleType, order.refundAt);
+  if (originalPeriod.start === refundPeriod.start) return null;
+  return {
+    ...order,
+    id: `${order.id}-cross-period-refund`,
+    paidAt: order.refundAt,
+    businessDate: order.refundAt.slice(0, 10),
+    settlementAdjustment: { type: 'cross_period_refund', originalPeriod: originalPeriod.label, refundAt: order.refundAt }
+  };
+}
+
+function billPayableAmount(order: Order, account: ShareAccountRef): number {
+  const share = settlementShareForAccount(order, account);
+  if (!share) return 0;
+  return isCrossPeriodRefundAdjustment(order) ? 0 : Number(share.amount || 0);
+}
+
+function billSplitNetAmount(order: Order, account: ShareAccountRef, cycleType: SettlementCycleType, periodStart: string): number {
+  const share = settlementShareForAccount(order, account);
+  if (!share || order.splitStatus !== '已分账') return 0;
+  if (isCrossPeriodRefundAdjustment(order)) return -Number(share.reversalAmount || 0);
+  const originalPeriod = settlementPeriodMetaForPayment(cycleType, order.paidAt || order.createdAt);
+  const isOriginalCrossPeriodRow = Boolean(order.refundAt && order.reversalStatus === '已回退'
+    && originalPeriod.start === periodStart
+    && originalPeriod.start !== settlementPeriodMetaForPayment(cycleType, order.refundAt).start);
+  return isOriginalCrossPeriodRow ? Number(share.amount || 0) : Number(share.amount || 0) - Number(share.reversalAmount || 0);
+}
+
+function billSplitStatus(order: Order, cycleType: SettlementCycleType, periodStart: string): string {
+  if (isCrossPeriodRefundAdjustment(order)) return order.splitStatus || '已分账';
+  const originalPeriod = settlementPeriodMetaForPayment(cycleType, order.paidAt || order.createdAt);
+  const isOriginalCrossPeriodRow = Boolean(order.refundAt && order.reversalStatus === '已回退'
+    && originalPeriod.start === periodStart
+    && originalPeriod.start !== settlementPeriodMetaForPayment(cycleType, order.refundAt).start);
+  return isOriginalCrossPeriodRow ? '已分账' : (order.splitStatus || '-');
+}
+
+function billReversalStatus(order: Order, cycleType: SettlementCycleType, periodStart: string): string {
+  if (isCrossPeriodRefundAdjustment(order)) return order.reversalStatus || '-';
+  const originalPeriod = settlementPeriodMetaForPayment(cycleType, order.paidAt || order.createdAt);
+  const isOriginalCrossPeriodRow = Boolean(order.refundAt && order.reversalStatus === '已回退'
+    && originalPeriod.start === periodStart
+    && originalPeriod.start !== settlementPeriodMetaForPayment(cycleType, order.refundAt).start);
+  return isOriginalCrossPeriodRow ? '-' : (order.reversalStatus || '-');
 }
 
 function settlementShareIncluded(order: Order, share: OrderSplitShare, fundingMode: FundingMode): boolean {
@@ -1758,36 +1821,31 @@ export function buildSettlementRows(
   ): SettlementRow | null => {
     const ordersInRow = matched.map(item => item.order);
     if (!ordersInRow.length) return null;
-    const income = roundAmount(ordersInRow.reduce((sum, order) => sum + Number(order.paidAmount ?? order.amount ?? 0), 0));
-    const refundAmount = roundAmount(ordersInRow.reduce((sum, order) => sum + Number(order.refundAmount || 0), 0));
+    const cycleType = fundingMode === 'order_split'
+      ? account.settlementCycle || (account.config && account.config.settlementCycle) || 'monthly'
+      : 'monthly';
+    const resolvedPeriodMeta = periodMeta || settlementPeriodMeta(cycleType);
+    const income = roundAmount(ordersInRow.reduce((sum, order) => sum + (isCrossPeriodRefundAdjustment(order) ? 0 : Number(order.paidAmount ?? order.amount ?? 0)), 0));
+    const refundAmount = roundAmount(ordersInRow.reduce((sum, order) => sum + (isCrossPeriodRefundAdjustment(order) ? Number(order.refundAmount || 0) : 0), 0));
     const feeAmount = roundAmount(ordersInRow.reduce((sum, order) => sum + Number((order as unknown as { settlementFeeAmount?: number }).settlementFeeAmount || 0), 0));
     const netAmount = roundAmount(ordersInRow.reduce((sum, order) => sum + Number((order as unknown as { netSettlementBase?: number }).netSettlementBase || 0), 0));
-    const payable = roundAmount(matched.reduce((sum, item) => sum + settlementObjectAmount(item.order, account), 0));
+    const payable = roundAmount(matched.reduce((sum, item) => sum + billPayableAmount(item.order, account), 0));
     const rawPremiumAmount = roundAmount(matched.reduce((sum, item) => {
       const share = settlementShareForAccount(item.order, account);
-      return sum + Number(share && share.premiumAmount || 0);
+      return sum + (isCrossPeriodRefundAdjustment(item.order) ? 0 : Number(share && share.premiumAmount || 0));
     }, 0));
     const premiumAmount = account.objectType === 'merchant' ? rawPremiumAmount : 0;
     const settledAmount = fundingMode === 'order_split'
-      ? roundAmount(matched.reduce((sum, item) => sum + (item.order.splitStatus === '已分账' ? settlementObjectAmount(item.order, account) : 0), 0))
+      ? roundAmount(matched.reduce((sum, item) => sum + billSplitNetAmount(item.order, account, cycleType, resolvedPeriodMeta.start), 0))
       : 0;
-    const reversedAmount = fundingMode === 'order_split'
-      ? roundAmount(matched.reduce((sum, item) => {
-        const share = settlementShareForAccount(item.order, account);
-        return sum + (item.order.reversalStatus === '已回退' && share ? Number(share.reversalAmount || 0) : 0);
-      }, 0))
-      : 0;
+    const reversedAmount = 0;
     const netSettledAmount = fundingMode === 'order_split'
-      ? roundAmount(Math.max(0, settledAmount - reversedAmount))
+      ? settledAmount
       : 0;
     const hasMerchantDirectOrder = fundingMode === 'offline_settlement' && ordersInRow.some(order => order.collectionMode === 'merchant');
     const status: SettlementRowStatus = fundingMode === 'order_split'
       ? aggregateOrderSplitStatus(ordersInRow)
       : (account.objectType === 'merchant' && hasMerchantDirectOrder ? '出账中' : '待申请');
-    const cycleType = fundingMode === 'order_split'
-      ? account.settlementCycle || (account.config && account.config.settlementCycle) || 'monthly'
-      : 'monthly';
-    const resolvedPeriodMeta = periodMeta || settlementPeriodMeta(cycleType);
     return {
       id: `${view}-${account.id}-${resolvedPeriodMeta.start.slice(0, 10)}`,
       view,
@@ -1805,7 +1863,7 @@ export function buildSettlementRows(
       objectType: account.objectType,
       scenicText: Array.from(new Set(ordersInRow.map(order => order.point))).join('、'),
       scenicNames: Array.from(new Set(ordersInRow.map(orderScenicName))),
-      orderCount: ordersInRow.length,
+      orderCount: ordersInRow.filter(order => !isCrossPeriodRefundAdjustment(order)).length,
       income,
       refundAmount,
       feeRate: settlementFeeRateForMode(),
@@ -1843,6 +1901,13 @@ export function buildSettlementRows(
         const group = grouped.get(key) || { periodMeta, items: [] };
         group.items.push(item);
         grouped.set(key, group);
+        const adjustment = crossPeriodRefundAdjustment(item.order, cycleType);
+        if (adjustment) {
+          const adjustmentPeriod = settlementPeriodMetaForPayment(cycleType, adjustment.paidAt);
+          const adjustmentGroup = grouped.get(adjustmentPeriod.start) || { periodMeta: adjustmentPeriod, items: [] };
+          adjustmentGroup.items.push({ order: adjustment, share: item.share });
+          grouped.set(adjustmentPeriod.start, adjustmentGroup);
+        }
       });
       grouped.forEach(({ periodMeta, items }) => {
         const row = buildSettlementRow(account, items, periodMeta);
@@ -1923,32 +1988,39 @@ export function filterBillOrders(bill: SettlementRow, scenic: string): Order[] {
 /** 结算订单计算说明（仅按比例），返回纯文本描述 */
 export function settlementOrderCalculation(order: Order, share: OrderSplitShare | null = null, detailFactor = 1): { rule: string } {
   const ratio = share && (share.configuredRatio === 0 || share.configuredRatio) ? Number(share.configuredRatio) : Number(share && share.ratio || 0);
+  if (isCrossPeriodRefundAdjustment(order)) {
+    return { rule: `按比例：${roundAmount(ratio)} %（跨期退款，原分账账期：${order.settlementAdjustment?.originalPeriod || '-'}）` };
+  }
   return { rule: `按比例：${roundAmount(ratio)} %` };
 }
 
 export function billOrderDisplay(bill: SettlementRow, order: Order, factor: number): {
-  amount: number; payable: number; premiumAmount: number; calculationText: string; splitNet: number; splitStatusText: string; splitStatusColor: string; splitStatusReason: string;
+  amount: number; payable: number; premiumAmount: number; calculationText: string; splitNet: number; splitStatusText: string; splitStatusColor: string; splitStatusReason: string; reversalStatusText: string; reversalStatusColor: string; reversalStatusReason: string;
 } {
   const detailFactor = Number(factor || 1);
+  const isAdjustment = isCrossPeriodRefundAdjustment(order);
   const amount = roundAmount(Number(order.paidAmount ?? order.amount ?? 0) * detailFactor);
   const share = settlementShareForAccount(order, bill.account);
-  const payable = share ? roundAmount(Number(share.amount || 0) * detailFactor) : 0;
+  const payable = roundAmount(billPayableAmount(order, bill.account) * detailFactor);
   const premiumAmount = bill.objectType === 'merchant' && share
-    ? roundAmount(Number(share.premiumAmount || 0) * detailFactor)
+    ? roundAmount((isAdjustment ? 0 : Number(share.premiumAmount || 0)) * detailFactor)
     : 0;
   const calculation = settlementOrderCalculation(order, share, detailFactor);
   const isSplit = settlementViewFundingMode(bill.view) === 'order_split';
-  const splitSettledAmount = isSplit && share && order.splitStatus === '已分账'
-    ? Number(share.amount || 0) * detailFactor
-    : 0;
-  const splitReversedAmount = isSplit && share && order.reversalStatus === '已回退'
-    ? Number(share.reversalAmount || 0) * detailFactor
-    : 0;
-  const splitNet = roundAmount(Math.max(0, splitSettledAmount - splitReversedAmount));
+  const splitNet = isSplit ? roundAmount(billSplitNetAmount(order, bill.account, bill.cycleType, bill.periodStart) * detailFactor) : 0;
   const rawResult = (isSplit && share)
-    ? (order.reversalStatus || order.splitStatus || '待分账')
+    ? billSplitStatus(order, bill.cycleType, bill.periodStart)
     : '-';
   const result = rawResult;
+  const reversalResult = (isSplit && share)
+    ? billReversalStatus(order, bill.cycleType, bill.periodStart)
+    : '-';
+  const splitStatusReason = result === '分账失败'
+    ? (order.splitTransactions || [])
+      .filter((transaction) => transaction.status === '分账失败')
+      .map((transaction) => `${transaction.splitNo || '未返回分账流水号'}：${transaction.failureReason || '未返回失败原因'}`)
+      .join('，') || `${order.splitNo || '未返回分账流水号'}：${order.fundingFailReason || '未返回失败原因'}`
+    : '';
   const colorMap: Record<string, string> = {
     待分账: 'warning', 待回退: 'warning', 分账失败: 'error', 回退失败: 'error',
     已分账: 'success', 已回退: 'success', 已冲减: 'success', 已生成分成: 'success', '-': 'default'
@@ -1961,7 +2033,10 @@ export function billOrderDisplay(bill: SettlementRow, order: Order, factor: numb
     splitNet,
     splitStatusText: result,
     splitStatusColor: colorMap[result] || 'default',
-    splitStatusReason: ['分账失败', '回退失败'].includes(result) ? (order.fundingFailReason || '未返回失败原因') : ''
+    splitStatusReason,
+    reversalStatusText: reversalResult,
+    reversalStatusColor: colorMap[reversalResult] || 'default',
+    reversalStatusReason: reversalResult === '回退失败' ? order.fundingFailReason || '未返回失败原因' : ''
   };
 }
 
@@ -1986,35 +2061,24 @@ export function billMetrics(bill: SettlementRow, orders: Order[]): {
   orderCount: number; income: number; refundAmount: number; payable: number; baseShareAmount: number; premiumAmount: number; netSettledAmount: number; feeDisplay: string;
 } {
   const detailFactor = Number(bill.detailFactor || 1);
-  const income = roundAmount((orders || []).reduce((sum, order) => sum + Number(order.paidAmount ?? order.amount ?? 0) * detailFactor, 0));
-  const refundAmount = roundAmount((orders || []).reduce((sum, order) => sum + Number(order.refundAmount || 0) * detailFactor, 0));
+  const income = roundAmount((orders || []).reduce((sum, order) => sum + (isCrossPeriodRefundAdjustment(order) ? 0 : Number(order.paidAmount ?? order.amount ?? 0)) * detailFactor, 0));
+  const refundAmount = roundAmount((orders || []).reduce((sum, order) => sum + (isCrossPeriodRefundAdjustment(order) ? Number(order.refundAmount || 0) : 0) * detailFactor, 0));
   const payable = roundAmount((orders || []).reduce((sum, order) => {
-    const share = settlementShareForAccount(order, bill.account);
-    if (!share) return sum;
-    return sum + Number(share.amount || 0) * detailFactor;
+    return sum + billPayableAmount(order, bill.account) * detailFactor;
   }, 0));
   const rawPremiumAmount = roundAmount((orders || []).reduce((sum, order) => {
     const share = settlementShareForAccount(order, bill.account);
-    return sum + Number(share && share.premiumAmount || 0) * detailFactor;
+    return sum + (isCrossPeriodRefundAdjustment(order) ? 0 : Number(share && share.premiumAmount || 0)) * detailFactor;
   }, 0));
   const premiumAmount = bill.objectType === 'merchant' ? rawPremiumAmount : 0;
   const isSplit = settlementViewFundingMode(bill.view) === 'order_split';
   const settledAmount = isSplit
-    ? roundAmount((orders || []).reduce((sum, order) => {
-      const share = settlementShareForAccount(order, bill.account);
-      return sum + (share && order.splitStatus === '已分账' ? Number(share.amount || 0) * detailFactor : 0);
-    }, 0))
+    ? roundAmount((orders || []).reduce((sum, order) => sum + billSplitNetAmount(order, bill.account, bill.cycleType, bill.periodStart) * detailFactor, 0))
     : Number(bill.settledAmount || 0);
-  const reversedAmount = isSplit
-    ? roundAmount((orders || []).reduce((sum, order) => {
-      const share = settlementShareForAccount(order, bill.account);
-      return sum + (share && order.reversalStatus === '已回退' ? Number(share.reversalAmount || 0) * detailFactor : 0);
-    }, 0))
-    : 0;
-  const netSettledAmount = roundAmount(Math.max(0, settledAmount - reversedAmount));
+  const netSettledAmount = settledAmount;
   const feeAmount = settlementFeeAmount(income);
   return {
-    orderCount: (orders || []).length,
+    orderCount: (orders || []).filter(order => !isCrossPeriodRefundAdjustment(order)).length,
     income,
     refundAmount,
     payable,

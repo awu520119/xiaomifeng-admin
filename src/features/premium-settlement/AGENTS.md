@@ -38,6 +38,7 @@
 ## 当前进度
 
 - 线上自动分账新建时可选周结、月结或延时 T+1，保存后不可修改；线下对公结算固定按月汇总，次月 20 日可申请结算。
+- 线上自动分账跨期退款按退款完成时间进入退款发生账期，作为负数「跨期退款调账」明细展示原分账账期；原支付账期仍按已分账展示，不因后续退款回写。Mock 订单通过 `refundAt` 提供退款完成时间。
 - 推广方仅支持线下对公结算，不配置结算周期，统一每月 20 日生成上月账单。
 - 结算中心保留三个原页签和原状态口径，不显示预估标识；线上/线下均有周结 Mock，自营视角的对象与类型拆列展示。
 - 渠道和推广方账期不展示溢价，底层 Mock 溢价金额固定为 0。
@@ -70,3 +71,7 @@
 - 订单详情正文抽到 `pages/OrderDetailSections.tsx`，订单管理抽屉与 `#/demo/funding/*` 两个路由演示共用；演示路由不套后台外壳，`npm run share` 统一导出包含全部项目路由的单文件 HTML。
 - 导出有三个出口：`npm run share` 整站单文件、`npm run review:all` 按评审场景出 `review-*.html`、`npm run prd:all` 按 `docs/<模块>/` 下的 PRD 文件名逐篇出同名 HTML。新增 PRD 后需要在 `scripts/inline-share.mjs` 的 `prdPages` 里登记落地 hash，否则脚本会直接报错（`docs/` 下任何 `.md` 未登记即失败）。
 - 独立演示页复用真实 antd Drawer，靠 `src/styles.css` 末尾 `.demo-detail-page` 一段把面板摊平成文档流整页（`display:block !important` 是必需的：rc-motion 入场动画被停掉后不会清掉它自己挂的 inline `display:none`，少了这条整页空白）。改抽屉外观时注意别只改演示页或只改抽屉。
+- 多笔分账流水在订单详情与线上自动分账账期详情直接以中文逗号分隔展示；分账失败原因在分账状态下按“失败流水号：失败原因”成对以中文逗号分隔展示。账期详情保持紧凑截断，鼠标悬浮可查看完整内容，不增加摘要、展开态或二级抽屉。任一流水失败时订单状态统一为“分账失败”，不使用“部分分账失败”。
+- 《订单分账异常 PRD》导出页落到订单 `2026100610362400033` 的多笔分账详情，并使用真实 Drawer 遮罩展示背景；映射维护在 `scripts/inline-share.mjs` 的 `prdPages`。
+- `npm run build && node scripts/inline-share.mjs --review=settlement-online-self-store-2026-05-24` 导出 `self_store_ops` 在 2026-05-24 的线上自动分账账期详情；账期路由为 `thirdParty-tm003-2026-05-24`。
+- 《结算账期详情 PRD》独立评审页落在月结渠道 `thirdParty-tm006-2026-09-01`，同屏展示正常分账与跨期退款冲减；分账、回退状态下方均展示实际时间，无回退时展示「-」。

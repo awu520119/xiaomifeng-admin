@@ -1,5 +1,5 @@
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import { App, Button, Modal, Select, Table, Tag } from 'antd';
+import { App, Button, Modal, Select, Table, Tag, Tooltip } from 'antd';
 import type { TableProps } from 'antd';
 import { useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -63,9 +63,10 @@ export default function BillDetailPage() {
       return;
     }
     const isReversal = order.reversalStatus === '回退失败';
+    const hasMultipleSplitTransactions = (order.splitTransactions || []).length > 1;
     Modal.confirm({
-      title: isReversal ? '确认重试回退？' : '确认重试分账？',
-      content: isReversal ? '重试后将重新发起该笔回退。' : '重试后将重新发起该笔分账。',
+      title: isReversal ? '确认重试回退？' : (hasMultipleSplitTransactions ? '确认重试失败分账？' : '确认重试分账？'),
+      content: isReversal ? '重试后将重新发起该笔回退。' : (hasMultipleSplitTransactions ? '重试后将重新发起失败分账。' : '重试后将重新发起该笔分账。'),
       okText: '确认重试',
       cancelText: '取消',
       onOk: () => {
@@ -112,8 +113,18 @@ export default function BillDetailPage() {
         align: 'center',
         render: (_: unknown, order: Order) => orderStatusTag(order),
       },
-      { title: '支付时间', key: 'paidAt', width: 150, dataIndex: 'paidAt' },
-      { title: '完成时间', key: 'completedAt', width: 150, dataIndex: 'completedAt' },
+      {
+        title: '支付时间',
+        key: 'paidAt',
+        width: 150,
+        render: (_: unknown, order: Order) => order.settlementAdjustment ? order.settlementAdjustment.refundAt : order.paidAt,
+      },
+      {
+        title: '完成时间',
+        key: 'completedAt',
+        width: 150,
+        render: (_: unknown, order: Order) => order.settlementAdjustment ? '-' : order.completedAt,
+      },
       {
         title: '订单金额',
         key: 'amount',
@@ -121,7 +132,7 @@ export default function BillDetailPage() {
         align: 'right',
         render: (_: unknown, order: Order) => {
           const d = billOrderDisplay(row, order, row.detailFactor || 1);
-          return <span className="money-text">￥{moneyText(d.amount)}</span>;
+          return <span className="money-text" style={d.amount < 0 ? { color: '#cf3f36' } : undefined}>￥{moneyText(d.amount)}</span>;
         },
       },
       {
@@ -133,7 +144,7 @@ export default function BillDetailPage() {
           return (
             <div className="rule-detail-cell">
               <span className="rule-text">{d.calculationText}</span>
-              {supportsPremium ? (
+              {supportsPremium && !order.settlementAdjustment ? (
                 <span className="premium-detail">基础 ￥{moneyText(d.payable - d.premiumAmount)} + 溢价 ￥{moneyText(d.premiumAmount)}</span>
               ) : null}
             </div>
@@ -146,8 +157,9 @@ export default function BillDetailPage() {
         width: 132,
         align: 'right',
         render: (_: unknown, order: Order) => {
+          if (order.settlementAdjustment) return <span className="invoice-empty">-</span>;
           const d = billOrderDisplay(row, order, row.detailFactor || 1);
-          return <span className="money-text strong">￥{moneyText(d.payable)}</span>;
+          return <span className="money-text strong" style={d.payable < 0 ? { color: '#cf3f36' } : undefined}>￥{moneyText(d.payable)}</span>;
         },
       },
     ];
@@ -160,7 +172,7 @@ export default function BillDetailPage() {
           align: 'right',
           render: (_: unknown, order: Order) => {
             const d = billOrderDisplay(row, order, row.detailFactor || 1);
-            return <span className="money-text">￥{moneyText(d.splitNet)}</span>;
+            return <span className="money-text" style={d.splitNet < 0 ? { color: '#cf3f36' } : undefined}>￥{moneyText(d.splitNet)}</span>;
           },
         },
         {
@@ -170,16 +182,48 @@ export default function BillDetailPage() {
           render: (_: unknown, order: Order) => {
             const d = billOrderDisplay(row, order, row.detailFactor || 1);
             if (d.splitStatusText === '-') return <span className="invoice-empty">-</span>;
-            const isFailed = ['分账失败', '回退失败'].includes(d.splitStatusText);
+            const isFailed = d.splitStatusText === '分账失败';
+            const hasMultipleSplitTransactions = (order.splitTransactions || []).length > 1;
             return (
               <div className="split-status-cell">
                 <div><Tag color={d.splitStatusColor}>{d.splitStatusText}</Tag></div>
+                <div className="split-failure-reason">{order.splitAt || '-'}</div>
                 {isFailed ? (
                   <>
-                    <div className="split-failure-reason" title={d.splitStatusReason}>原因：{d.splitStatusReason}</div>
+                    <Tooltip title={`原因：${d.splitStatusReason}`}>
+                      <div className="split-failure-reason">原因：{d.splitStatusReason}</div>
+                    </Tooltip>
                     {canRetrySplit ? (
                       <Button type="link" size="small" className="split-retry-button" onClick={() => retrySplit(order)}>
-                        {d.splitStatusText === '回退失败' ? '重试回退' : '重试分账'}
+                        {hasMultipleSplitTransactions ? '重试失败分账' : '重试分账'}
+                      </Button>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            );
+          },
+        },
+        {
+          title: '回退状态',
+          key: 'reversalStatus',
+          width: 180,
+          render: (_: unknown, order: Order) => {
+            const d = billOrderDisplay(row, order, row.detailFactor || 1);
+            if (d.reversalStatusText === '-') return <span className="invoice-empty">-</span>;
+            const isFailed = d.reversalStatusText === '回退失败';
+            return (
+              <div className="split-status-cell">
+                <div><Tag color={d.reversalStatusColor}>{d.reversalStatusText}</Tag></div>
+                <div className="split-failure-reason">{order.reversalAt || '-'}</div>
+                {isFailed ? (
+                  <>
+                    <Tooltip title={`原因：${d.reversalStatusReason}`}>
+                      <div className="split-failure-reason">原因：{d.reversalStatusReason}</div>
+                    </Tooltip>
+                    {canRetrySplit ? (
+                      <Button type="link" size="small" className="split-retry-button" onClick={() => retrySplit(order)}>
+                        重试回退
                       </Button>
                     ) : null}
                   </>

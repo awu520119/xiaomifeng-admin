@@ -1,0 +1,97 @@
+{
+  "docsDir": "docs/premium-settlement",
+  "viewer": {
+    "projectPath": "../../小蜜蜂项目原型查看器/xiaomifeng_premium",
+    "projectName": "形影随拍结算后台 · 原型查看器",
+    "groups": [
+      { "id": "member-management", "title": "成员管理", "order": 1 },
+      { "id": "promotion-management", "title": "推广方管理", "order": 2 },
+      { "id": "settlement-management", "title": "结算管理", "order": 3 },
+      { "id": "order-management", "title": "订单管理", "order": 5 },
+      { "id": "task-management", "title": "任务管理", "order": 6 }
+    ]
+  },
+  "pages": [
+    {
+      "doc": "景区商家分成配置PRD-20260920.md",
+      "hash": "#/demo/export/member/merchant",
+      "mode": "drawer",
+      "id": "merchant-commission-config",
+      "title": "景区商家分成配置",
+      "parent": "member-management",
+      "order": 1
+    },
+    {
+      "doc": "渠道分成配置PRD-20260920.md",
+      "hash": "#/demo/export/member/channel",
+      "mode": "drawer",
+      "id": "channel-commission-config",
+      "title": "渠道分成配置",
+      "parent": "member-management",
+      "order": 2
+    },
+    {
+      "doc": "推广方分成配置PRD-20260920.md",
+      "hash": "#/demo/export/promotion/create",
+      "mode": "drawer",
+      "id": "promotion-commission-config",
+      "title": "推广方分成配置",
+      "parent": "promotion-management",
+      "order": 1
+    },
+    {
+      "doc": "结算管理列表PRD-20260920.md",
+      "hash": "#/settlement",
+      "mode": "screen",
+      "id": "settlement-list",
+      "title": "结算管理列表",
+      "parent": "settlement-management",
+      "order": 1
+    },
+    {
+      "doc": "结算管理详情-线上自动分账PRD-20260920.md",
+      "hash": "#/settlement/bill/thirdParty/thirdParty-tm003-2026-09-14",
+      "mode": "screen",
+      "id": "settlement-bill-online",
+      "title": "结算管理详情-线上自动分账",
+      "parent": "settlement-management",
+      "order": 2
+    },
+    {
+      "doc": "结算账期详情PRD-20260920.md",
+      "hash": "#/settlement/bill/thirdParty/thirdParty-tm006-2026-09-01?perspective=self",
+      "mode": "screen",
+      "id": "settlement-period-detail",
+      "title": "结算账期详情",
+      "parent": "settlement-management",
+      "order": 3
+    },
+    {
+      "doc": "订单分账异常PRD-20260920.md",
+      "hash": "#/demo/export/order-multi-split",
+      "mode": "drawer",
+      "id": "order-split-failure",
+      "title": "订单分账异常",
+      "parent": "order-management",
+      "order": 1
+    },
+    {
+      "doc": "订单详情起飞任务IDPRD-20260928.md",
+      "hash": "#/demo/export/order-flight-tasks",
+      "mode": "drawer",
+      "id": "order-flight-tasks",
+      "title": "订单详情起飞任务 ID",
+      "parent": "order-management",
+      "order": 2
+    },
+    {
+      "doc": "起飞任务关联订单号PRD-20260928.md",
+      "hash": "#/demo/export/flight-task-detail",
+      "mode": "drawer",
+      "id": "flight-task-detail",
+      "title": "起飞任务关联订单号",
+      "parent": "task-management",
+      "order": 1
+    }
+  ]
+}

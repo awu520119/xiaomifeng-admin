@@ -13,6 +13,7 @@
     "review:all": "npm run build && node scripts/inline-share.mjs --review=all",
     "prd:all": "npm run build && node scripts/inline-share.mjs --prd=all",
     "prd:flight-task-details": "npm run build && node scripts/inline-share.mjs --prd=flight-task-details",
+    "publish:viewer": "npm run check && npm run build && node scripts/publish-to-viewer.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

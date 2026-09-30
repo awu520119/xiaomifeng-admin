@@ -117,7 +117,7 @@ export interface Order {
   scenicName: string; accountId: string; accountName: string; accountSource: string;
   channelAccountId: string; channelAccountIds: string[];
   settlementEligible: boolean; settlementEligibleAt?: string;
-  splitStatus?: string; reversalStatus?: string; splitNo?: string; reversalNo?: string;
+  splitStatus?: string; reversalStatus?: string; splitNo?: string; reversalNo?: string; splitAt?: string; reversalAt?: string;
   /** 单次支付超过 7 个分账方时拆出的分账流水；仅多笔时在订单详情展开明细。 */
   splitTransactions?: SplitTransaction[];
   fundingFailReason?: string;
@@ -126,7 +126,9 @@ export interface Order {
   shootInfo?: { themeName?: string; scenicName?: string; shootPoint?: string; route?: string; clipTemplate?: string; motionDesc?: string; peopleCount?: string; flightTaskId?: string; flightTaskIds?: string[]; droneSn?: string };
   flowLogs?: Array<{ time: string; title: string }>;
   businessDate: string;
-  createdAt: string; paidAt: string; completedAt: string;
+  createdAt: string; paidAt: string; completedAt: string; refundAt?: string;
+  /** 由结算引擎派生的跨期退款负向明细，不会改变原订单所属账期。 */
+  settlementAdjustment?: { type: 'cross_period_refund'; originalPeriod: string; refundAt: string };
   splitReceivers?: SplitReceiver[]; channelSnapshots?: OrderChannelSnapshot[];
   settlementShares?: OrderSplitShare[]; settlementMode?: string; splitScheme?: any;
   orderStatus?: string;                                     // 状态列等展示用派生

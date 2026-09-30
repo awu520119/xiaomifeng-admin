@@ -4,6 +4,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadPrototypePages } from './prototype-pages.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url)) + '/..';
 const dist = join(root, 'dist');
@@ -71,6 +72,7 @@ const reviewPages = {
   'flight-task-detail': { file: 'review-flight-task-detail.html', hash: '#/demo/export/flight-task-detail' },
   settlement: { file: 'review-settlement-center.html', hash: '#/settlement' },
   'settlement-online-detail': { file: 'review-settlement-online-detail.html', hash: '#/settlement/bill/thirdParty/thirdParty-tm005-weekly-paid-1' },
+  'settlement-online-self-store-2026-05-24': { file: 'review-settlement-online-self-store-2026-05-24.html', hash: '#/settlement/bill/thirdParty/thirdParty-tm003-2026-05-24' },
   'settlement-offline-detail': { file: 'review-settlement-offline-detail.html', hash: '#/settlement/bill/offline/offline-tm003-paying' },
   'settlement-promotion-detail': { file: 'review-settlement-promotion-detail.html', hash: '#/settlement/bill/promotion/promotion-promotion_lake_view-paid' },
 };
@@ -105,18 +107,9 @@ if (review) {
 // PRD 页：每篇 PRD 一个独立 HTML，文件名与 docs/premium-settlement/ 下的 PRD 完全同名（只换后缀）。
 // key 是 PRD 文件名，hash 是该 PRD 描述的页面；映射全部沿用 reviewPages 里已验证的 hash。
 // 标签页标题不写在这里，直接从 PRD 的 H1 读，避免文档改标题后与产物漂移。
-const prdDir = join(root, 'docs/premium-settlement');
-const prdPages = {
-  '结算管理列表PRD-20260920.md': { hash: '#/settlement' },
-  '结算账期详情PRD-20260920.md': { hash: '#/settlement/bill/thirdParty/thirdParty-tm003-2026-09-30' },
-  '结算管理详情-线上自动分账PRD-20260920.md': { hash: '#/settlement/bill/thirdParty/thirdParty-tm003-2026-09-14' },
-  '订单分账异常PRD-20260920.md': { hash: '#/demo/export/order-reversal-failure' },
-  '订单详情起飞任务IDPRD-20260928.md': { hash: '#/demo/export/order-flight-tasks' },
-  '起飞任务关联订单号PRD-20260928.md': { hash: '#/demo/export/flight-task-detail' },
-  '景区商家分成配置PRD-20260920.md': { hash: '#/demo/export/member/merchant' },
-  '渠道分成配置PRD-20260920.md': { hash: '#/demo/export/member/channel' },
-  '推广方分成配置PRD-20260920.md': { hash: '#/demo/export/promotion/create' },
-};
+const prototypePages = loadPrototypePages(root);
+const prdDir = join(root, prototypePages.docsDir);
+const prdPages = Object.fromEntries(prototypePages.pages.map((page) => [page.doc, page]));
 const prdGroups = {
   'flight-task-details': ['订单详情起飞任务IDPRD-20260928.md', '起飞任务关联订单号PRD-20260928.md'],
 };
@@ -163,12 +156,13 @@ if (prd) {
     const title = prdTitle(mdName);
     const titleTag = `<title>${title}</title>`;
     const hashScript = `<script>if(!location.hash)location.hash='${target.hash}';</script>\n`;
-    const prdHtml = withoutSider(html)
+    const prdHtml = (target.mode === 'screen' ? withoutSider(html) : html)
       .replace(/<title>[\s\S]*?<\/title>/, () => titleTag)
       .replace(marker, () => `${hashScript}${marker}`);
     // 写盘前自检：构建产物结构变了（找不到 <title> 或 module script）会导致注入静默失效，产出一堆落到兜底路由的页。
-    if (!prdHtml.includes(titleTag) || !prdHtml.includes(hashScript) || !prdHtml.includes('prd-static-page')) {
-      console.error(`注入失败：dist/index.html 的结构可能已变化（缺少 <title> 或 <script type="module">），请检查本脚本的替换目标。`);
+    const modeInjected = target.mode !== 'screen' || prdHtml.includes('prd-static-page');
+    if (!prdHtml.includes(titleTag) || !prdHtml.includes(hashScript) || !modeInjected) {
+      console.error(`注入失败：dist/index.html 的结构或页面模式可能已变化，请检查本脚本的替换目标。`);
       process.exit(1);
     }
     const prdFile = join(dist, mdName.replace(/\.md$/, '.html'));

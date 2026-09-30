@@ -104,7 +104,6 @@ const STATE_COLOR: Record<string, string> = {
   已回退: 'success',
   待回退: 'warning',
   分账失败: 'error',
-  部分分账失败: 'error',
   回退失败: 'error',
   订单分账: 'processing',
   线下对公结算: 'processing',
